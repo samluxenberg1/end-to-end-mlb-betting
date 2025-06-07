@@ -7,5 +7,8 @@ CREATE TABLE IF NOT EXISTS games (
     home_team    TEXT,
     away_team    TEXT,
     home_score   INT,
-    away_score   INT
+    away_score   INT,
+    state        TEXT,
+    venue        TEXT,
+    game_type    TEXT
 );

@@ -1,48 +1,64 @@
+import csv
+import logging
 from datetime import date
 import psycopg2
 from psycopg2.extras import execute_values # efficient bulk insert
-from extract_games import fetch_games
 
-def get_conn():
-    """
-    Returns a psycopg2 connection to the local Dockerized Postgres. 
-    """
-    return psycopg2.connect(
-        dbname="mlb_db",
-        user="mlb_user",
-        password="mlb_pass",
-        host="localhost",
-        port=5432
-    )
+logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(message)s")
 
-def load_games_to_db(rows: list[dict]) -> None:
-    """
-    Bulk-insert a list of dicts (from fetch_games) into the `games` table. 
-    Uses ON CONFLICT DO NOTHING so reruns are idempotent. ???????????
-    """
-    if not rows:
-        print("No games to load.")
-        return 
-    
-    keys = ("game_id", "game_date", "home_team", "away_team", "home_score", "away_score")
-    values = [[row[k] for k in keys] for row in rows]
+DB_CONFIG = {
+    dbname="mlb_db",
+    user="mlb_user", 
+    password="mlb_pass",
+    host="localhost",
+    port=5432,
+    }
 
-    sql = """
-        INSERT INTO games
-            (game_id, game_date, home_team, away_team, home_score, away_score)
-        VALUES %s
-        ON CONFLICT (game_id) DO NOTHING;
-    """
+CSV_PATH = "data/raw_games.csv"
 
-    with get_conn() as conn:
+
+def load_games_to_db(csv_path: str, db_config: dict) -> None:
+    """
+    Bulk-insert a csv file of games (from fetch_games) into the `games` table.
+    Uses ON CONFLICT DO NOTHIN so reruns are idempotent. 
+    """
+    # Connect to Postgres 
+    with psycopg2.connect(**db_config) as conn:
         with conn.cursor() as cur:
-            execute_values(cur, sql, values)
-        conn.commit()
+            with open(csv_path, newline='', encoding='utf-8') as csvfile:
+                reader = csv.DictReader(csvfile)
+                rows = list(reader)
 
-    print(f"Loaded {len(values)} into games")
+                if not rows:
+                    logging.warning("No rows found in CSV. Exiting.")
+                    return 
+                
+                columns = [
+                    "game_id", 
+                    "game_date", 
+                    "home_team", 
+                    "away_team", 
+                    "home_score", 
+                    "away_score", 
+                    "state", 
+                    "venue", 
+                    "game_type"
+                    ]
+                
+                values = [[row[col] for col in columns] for row in rows]
+
+                sql = f"""
+                    INSERT INTO games ({', '.join(columns)})
+                    VALUES %s
+                    ON CONFLICT (game_id) DO NOTHING;
+                """
+
+                logging.info(f"Inserting {len(values)} rows into the database...")
+                execute_values(cur, sql, values)
+                conn.commit()
+                logging.info("Insert complete.")
+                
 
 
 if __name__ == "__main__":
-    today = date.today().isoformat()
-    game_rows = fetch_games(today)
-    load_games_to_db(game_rows)
+    load_games_to_db(CSV_PATH)
