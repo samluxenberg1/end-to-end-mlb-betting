@@ -1,17 +1,16 @@
 import csv
 import logging
-from datetime import date
 import psycopg2
 from psycopg2.extras import execute_values # efficient bulk insert
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(message)s")
 
 DB_CONFIG = {
-    dbname="mlb_db",
-    user="mlb_user", 
-    password="mlb_pass",
-    host="localhost",
-    port=5432,
+    "dbname": "mlb_db",
+    "user": "mlb_user", 
+    "password": "mlb_pass",
+    "host": "localhost",
+    "port": 5432,
     }
 
 CSV_PATH = "data/raw_games.csv"
@@ -61,4 +60,4 @@ def load_games_to_db(csv_path: str, db_config: dict) -> None:
 
 
 if __name__ == "__main__":
-    load_games_to_db(CSV_PATH)
+    load_games_to_db(csv_path=CSV_PATH, db_config=DB_CONFIG)
