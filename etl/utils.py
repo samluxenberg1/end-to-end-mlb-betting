@@ -1,5 +1,7 @@
 import requests
 from datetime import date
+from pydantic import BaseModel, validator
+from typing import Optional
 
 def fetch_games_for_date(date_str: str) -> list[dict]:
     """
@@ -54,7 +56,64 @@ def fetch_games(date_str: str) -> list[dict]:
         for g in games
     ]
 
-def fetch_team_stats(game_pk: str) -> list[str]:
+class TeamStats(BaseModel):
+    # All fields as Optional to handle None values gracefully
+    game_pk: Optional[int] = None
+    team_side: Optional[str] = None
+    team_id: Optional[int] = None
+    runs_batting: Optional[int] = None
+    hits_batting: Optional[int] = None
+    strikeOuts_batting: Optional[int] = None
+    baseOnBalls_batting: Optional[int] = None
+    avg: Optional[float] = None
+    obp: Optional[float] = None
+    slg: Optional[float] = None
+    pitchesThrown: Optional[int] = None
+    balls_pitching: Optional[int] = None
+    strikes_pitching: Optional[int] = None
+    strikeOuts_pitching: Optional[int] = None
+    baseOnBalls_pitching: Optional[int] = None
+    hits_pitching: Optional[int] = None
+    earnedRuns: Optional[int] = None
+    homeRuns_pitching: Optional[int] = None
+    runs_pitching: Optional[int] = None
+    era: Optional[float] = None
+    whip: Optional[float] = None
+    groundOuts_pitching: Optional[int] = None
+    airOuts_pitching: Optional[int] = None
+    total: Optional[int] = None
+    putOuts: Optional[int] = None
+    assists: Optional[int] = None
+    errors: Optional[int] = None
+    doublePlays: Optional[int] = None
+    triplePlays: Optional[int] = None
+    rangeFactor: Optional[float] = None
+    caughtStealing: Optional[int] = None
+    passedBall: Optional[int] = None
+    innings: Optional[float] = None
+
+    @validator('*', pre=True)
+    def clean_all_fields(cls, v): 
+        """Convert any problematic values to None"""
+
+        problem_values = {
+            '-.--', '--', '-', '', 
+            'N/A', 'n/a', 'NA', 'na',
+            'NULL', 'null', 'Null',
+            'undefined', 'UNDEFINED',
+            None
+        }
+
+        if v in problem_values:
+            return None
+        
+        # If it's a string, make sure it's not whitespace
+        if isinstance(v, str) and v.strip() == '':
+            return None
+        
+        return v
+
+def fetch_team_stats(game_pk: str) -> list[TeamStats]:
     url = f"https://statsapi.mlb.com/api/v1/game/{game_pk}/boxscore"
     resp = requests.get(url, timeout=15)
     resp.raise_for_status() # checks if http request was successful
@@ -108,7 +167,7 @@ def fetch_team_stats(game_pk: str) -> list[str]:
 
         rows.append(row)
 
-    return rows
+    return [TeamStats(**row) for row in rows]
 
 
 

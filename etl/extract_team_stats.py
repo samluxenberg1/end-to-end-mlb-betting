@@ -41,6 +41,7 @@ def extract_team_stats(start_str, end_str, output_csv="data/raw_team_stats.csv")
         
         game_ids = [g["game_id"] for g in games]
         
+        # For each game, fetch team statistics
         for game_id in game_ids:
             try:
                 team_stats = fetch_team_stats(game_id)
@@ -53,9 +54,9 @@ def extract_team_stats(start_str, end_str, output_csv="data/raw_team_stats.csv")
     # Save to CSV
     os.makedirs("data", exist_ok=True)
     with open(output_csv, "w", newline="") as f:
-        writer = csv.DictWriter(f, fieldnames=all_team_stats[0].keys())
+        writer = csv.DictWriter(f, fieldnames=all_team_stats[0].model_dump().keys())
         writer.writeheader()
-        writer.writerows(all_team_stats)
+        writer.writerows([team_stat.model_dump() for team_stat in all_team_stats])
 
     logging.info(f"Saved {len(all_team_stats)} games to {output_csv}")
 
