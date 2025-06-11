@@ -93,7 +93,7 @@ def load_team_stats_to_db(csv_path: str, db_config: dict) -> None:
                     "baseOnBalls_pitching",
                     "hits_pitching",
                     "earnedRuns",
-                    "homeRuns_pitcing",
+                    "homeRuns_pitching",
                     "runs_pitching",
                     "era",
                     "whip",

@@ -34,7 +34,7 @@ def extract_team_stats(start_str, end_str, output_csv="data/raw_team_stats.csv")
 
         logging.info(f"Fetching games for {date_str}")
         try: 
-            games = fetch_games_for_date(date_str)    
+            games = fetch_games_for_date(date_str, max_retries=3)    
         except Exception as e:
             logging.error(f"Failed to fetch games for {date_str}: {e}")
             continue
@@ -44,7 +44,7 @@ def extract_team_stats(start_str, end_str, output_csv="data/raw_team_stats.csv")
         # For each game, fetch team statistics
         for game_id in game_ids:
             try:
-                team_stats = fetch_team_stats(game_id)
+                team_stats = fetch_team_stats(game_id, max_retries=3)
                 if team_stats:
                     all_team_stats.extend(team_stats)
             except Exception as e:

@@ -1,20 +1,60 @@
 import requests
+import time
 from datetime import date
 from pydantic import BaseModel, validator
 from typing import Optional
+import logging
 
-def fetch_games_for_date(date_str: str) -> list[dict]:
+# Set up logging to track retry attempts
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
+
+def retry_request(url: str, max_retries: int = 3, delay: float = 1.0, backoff: float = 2.0, timeout: int = 15) -> requests.Response:
+    """
+    Make HTTP request with exponential backoff retry logic.
+    
+    Args:
+        url: URL to request
+        max_retries: Maximum number of retry attempts
+        delay: Initial delay between retries in seconds
+        backoff: Multiplier for delay after each retry
+        timeout: Request timeout in seconds
+    
+    Returns:
+        requests.Response object
+    
+    Raises:
+        requests.RequestException: If all retries fail
+    """
+    for attempt in range(max_retries + 1):
+        try:
+            resp = requests.get(url, timeout=timeout)
+            resp.raise_for_status()
+            return resp
+        except requests.exceptions.RequestException as e:
+            if attempt < max_retries:
+                wait_time = delay * (backoff ** attempt)
+                logger.warning(f"Request failed (attempt {attempt + 1}/{max_retries + 1}): {e}")
+                logger.info(f"Retrying in {wait_time:.1f} seconds...")
+                time.sleep(wait_time)
+            else:
+                logger.error(f"All retry attempts failed for URL: {url}")
+                raise
+
+def fetch_games_for_date(date_str: str, max_retries: int) -> list[dict]:
     """
     Scrapes MLB game ids from statsapi.mlb.com given a specified date.
 
     Args
         date_str: date for which to fetch games from the schedule
+        max_retries: maximum number of retry attempts
 
     Returns
         List of game dictionaries
     """
     url = f"https://statsapi.mlb.com/api/v1/schedule?sportId=1&date={date_str}"
-    resp = requests.get(url, timeout=15)
+    resp = retry_request(url, max_retries=max_retries)
+    #resp = requests.get(url, timeout=15)
     resp.raise_for_status()
     games = resp.json()["dates"][0]["games"]
     
@@ -26,18 +66,20 @@ def fetch_games_for_date(date_str: str) -> list[dict]:
         for g in games
     ]
 
-def fetch_games(date_str: str) -> list[dict]:
+def fetch_games(date_str: str, max_retries: int) -> list[dict]:
     """
     Scrapes MLB games from statsapi.mlb.com given a specified date. 
 
     Args
         date_str: date for which to fetch games from the schedule
+        max_retries: maximum number of rety attempts
     
     Returns
         List of game dictionaries
     """
     url = f"https://statsapi.mlb.com/api/v1/schedule?sportId=1&date={date_str}"
-    resp = requests.get(url, timeout=15)
+    resp = retry_request(url, max_retries=max_retries)
+    #resp = requests.get(url, timeout=15)
     resp.raise_for_status()
     games = resp.json()["dates"][0]["games"]
 
@@ -113,9 +155,10 @@ class TeamStats(BaseModel):
         
         return v
 
-def fetch_team_stats(game_pk: str) -> list[TeamStats]:
+def fetch_team_stats(game_pk: str, max_retries: int) -> list[TeamStats]:
     url = f"https://statsapi.mlb.com/api/v1/game/{game_pk}/boxscore"
-    resp = requests.get(url, timeout=15)
+    resp = retry_request(url, max_retries=max_retries)
+    #resp = requests.get(url, timeout=15)
     resp.raise_for_status() # checks if http request was successful
     data = resp.json()
 
@@ -147,7 +190,7 @@ def fetch_team_stats(game_pk: str) -> list[TeamStats]:
             "baseOnBalls_pitching": stats_pitching.get('baseOnBalls', 0),
             "hits_pitching": stats_pitching.get('hits', 0),
             "earnedRuns": stats_pitching.get('earnedRuns', 0),
-            "homeRuns_pitcing": stats_pitching.get('homeRuns', 0),
+            "homeRuns_pitching": stats_pitching.get('homeRuns', 0),
             "runs_pitching": stats_pitching.get('runs', 0),
             "era": stats_pitching.get('era', 0),
             "whip": stats_pitching.get('whip', 0),
@@ -176,5 +219,5 @@ if __name__ == "__main__":
     #print("\n\n")
     #print(fetch_team_stats(634627))
     print("\n")
-    print(fetch_games_for_date(date.today().isoformat()))
+    print(fetch_games_for_date(date.today().isoformat(), max_retries=3))
 

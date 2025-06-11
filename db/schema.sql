@@ -31,7 +31,7 @@ CREATE TABLE IF NOT EXISTS team_stats (
     baseOnBalls_pitching INTEGER,
     hits_pitching INTEGER,
     earnedRuns INTEGER,
-    homeRuns_pitcing INTEGER,
+    homeRuns_pitching INTEGER,
     runs_pitching INTEGER,
     era NUMERIC,
     whip NUMERIC,
