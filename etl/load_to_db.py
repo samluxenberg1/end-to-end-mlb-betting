@@ -17,6 +17,13 @@ CSV_PATH_GAMES = "data/raw_games.csv"
 CSV_PATH_TEAM_STATS = "data/raw_team_stats.csv"
 
 
+def clean_row(row):
+    """
+    Replace empty strings in a dictionary with None (SQL NULL).
+    This ensures that numeric fields can be inserted into the database correctly.
+    """
+    return {key: (None if val == '' else val) for key, val in row.items()}
+
 def load_games_to_db(csv_path: str, db_config: dict) -> None:
     """
     Bulk-insert a csv file of games (from fetch_games) into the `games` table.
@@ -110,7 +117,7 @@ def load_team_stats_to_db(csv_path: str, db_config: dict) -> None:
                     "passedBall",
                     "innings"
                 ]
-                
+                rows = [clean_row(row) for row in rows]
                 values = [[row[col] for col in columns] for row in rows]
 
                 sql = f"""
