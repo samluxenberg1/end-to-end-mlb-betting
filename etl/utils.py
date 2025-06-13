@@ -98,6 +98,53 @@ def fetch_games(date_str: str, max_retries: int) -> list[dict]:
         for g in games
     ]
 
+class PlayerStats(BaseModel):
+    game_pk: Optional[int] = None
+    player_id: Optional[int] = None
+    player_name: Optional[str] = None
+    team_side: Optional[str] = None  # 'home' or 'away'
+
+    # Pitching stats
+    innings_pitched: Optional[float] = None
+    hits_allowed: Optional[int] = None
+    runs_allowed: Optional[int] = None
+    earned_runs: Optional[int] = None
+    strikeouts_pitching: Optional[int] = None
+    walks_pitching: Optional[int] = None
+    pitches_thrown: Optional[int] = None
+    decisions: Optional[str] = None
+
+    # Batting stats
+    at_bats: Optional[int] = None
+    runs_scored: Optional[int] = None
+    hits: Optional[int] = None
+    home_runs: Optional[int] = None
+    rbis: Optional[int] = None
+    walks_batting: Optional[int] = None
+    strikeouts_batting: Optional[int] = None
+    left_on_base: Optional[int] = None
+    stolen_bases: Optional[int] = None
+
+    # Fielding stats
+    putouts: Optional[int] = None
+    assists: Optional[int] = None
+    errors: Optional[int] = None
+
+    @validator('*', pre=True)
+    def clean_all_fields(cls, v):
+        problem_values = {
+            '-.--', '--', '-', '', 
+            'N/A', 'n/a', 'NA', 'na',
+            'NULL', 'null', 'Null',
+            'undefined', 'UNDEFINED',
+            None
+        }
+        if v in problem_values:
+            return None
+        if isinstance(v, str) and v.strip() == '':
+            return None
+        return v
+
 class TeamStats(BaseModel):
     # All fields as Optional to handle None values gracefully
     game_pk: Optional[int] = None
@@ -161,7 +208,6 @@ def fetch_team_stats(game_pk: str, max_retries: int) -> list[TeamStats]:
     #resp = requests.get(url, timeout=15)
     resp.raise_for_status() # checks if http request was successful
     data = resp.json()
-
     teams = ['home', 'away']
     rows = []
 
@@ -212,12 +258,44 @@ def fetch_team_stats(game_pk: str, max_retries: int) -> list[TeamStats]:
 
     return [TeamStats(**row) for row in rows]
 
+def extract_player_stats(game_pk: str, max_retries: int) -> list[PlayerStats]:
+    url = f"https://statsapi.mlb.com/api/v1/game/{game_pk}/boxscore"
+    resp = retry_request(url, max_retries=max_retries)
+    #resp = requests.get(url, timeout=15)
+    resp.raise_for_status() # checks if http request was successful
+    data = resp.json()
+    teams = ['home', 'away']
+    rows = []
+
+    for side in teams:
+        team_players = data['teams'][side]['players']
+
+        for player_id, player_info in team_players.items():
+            person = player_info['person']
+            stats = player_info.get('stats', {})
+
+            # Initialize stats dictionary with player info
+            player_record = {
+                'game_pk': game_pk,
+                'player_id': person['id'],
+                'player_name': person['fullName'],
+                'team_side': side,
+            }
+
+            # Pitching Stats
+            pitching = stats.get('pitching', {})
+            player_record.update(
+                {
+                    'innings_pitched': pitching.get('inningsPitched'),
+                }
+            )
+
 
 
 if __name__ == "__main__":
     #print(fetch_games(date.today().isoformat())[:2])  # quick sanity check
     #print("\n\n")
-    #print(fetch_team_stats(634627))
-    print("\n")
-    print(fetch_games_for_date(date.today().isoformat(), max_retries=3))
+    print(fetch_team_stats(634627, max_retries=3))
+    #print("\n")
+    #print(fetch_games_for_date(date.today().isoformat(), max_retries=3))
 
