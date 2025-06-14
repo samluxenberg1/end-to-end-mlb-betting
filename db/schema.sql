@@ -49,3 +49,37 @@ CREATE TABLE IF NOT EXISTS team_stats (
     innings NUMERIC,
     PRIMARY KEY (game_pk, team_side)
 );
+
+CREATE TABLE IF NOT EXISTS player_stats (
+    game_pk INTEGER NOT NULL,
+    team_side TEXT NOT NULL,          -- 'home' or 'away'
+    player_id INTEGER NOT NULL,
+    player_name TEXT,
+
+    -- Batting
+    at_bats INTEGER,
+    runs_scored INTEGER,
+    hits INTEGER,
+    home_runs INTEGER,
+    rbis INTEGER,
+    walks_batting INTEGER,
+    strikeouts_batting INTEGER,
+    left_on_base INTEGER,
+    stolen_bases INTEGER,
+
+    -- Pitching
+    innings_pitched TEXT,             -- Format: 'X.Y' (e.g., '2.1' innings) – store as TEXT 
+    hits_allowed INTEGER,
+    runs_allowed INTEGER,
+    earned_runs INTEGER,
+    strikeouts_pitching INTEGER,
+    walks_pitching INTEGER,
+    pitches_thrown INTEGER,
+
+    -- Fielding
+    putouts INTEGER,
+    assists INTEGER,
+    errors INTEGER,
+
+    PRIMARY KEY (game_pk, player_id)
+);

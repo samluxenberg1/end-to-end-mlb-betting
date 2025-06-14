@@ -283,7 +283,7 @@ def fetch_player_stats(game_pk: str, max_retries: int) -> list[PlayerStats]:
 
                 # Batting
                 "at_bats": stats_batting.get('atBats'),
-                "runs_score": stats_batting.get('runs'),
+                "runs_scored": stats_batting.get('runs'),
                 "hits": stats_batting.get('hits'),
                 "home_runs": stats_batting.get('homeRuns'),
                 "rbis": stats_batting.get('rbi'),
@@ -300,7 +300,6 @@ def fetch_player_stats(game_pk: str, max_retries: int) -> list[PlayerStats]:
                 "strikeouts_pitching": stats_pitching.get('strikeOuts'),
                 "walks_pitching": stats_pitching.get('baseOnBalls'),
                 "pitches_thrown": stats_pitching.get('numberOfPitches'),
-                #"decisions": stats_pitching.get('decision'),
 
                 #Fielding
                 "putouts": stats_fielding.get('putOuts'),
