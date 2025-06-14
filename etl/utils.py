@@ -112,7 +112,6 @@ class PlayerStats(BaseModel):
     strikeouts_pitching: Optional[int] = None
     walks_pitching: Optional[int] = None
     pitches_thrown: Optional[int] = None
-    decisions: Optional[str] = None
 
     # Batting stats
     at_bats: Optional[int] = None
@@ -133,7 +132,7 @@ class PlayerStats(BaseModel):
     @validator('*', pre=True)
     def clean_all_fields(cls, v):
         problem_values = {
-            '-.--', '--', '-', '', 
+            '.---','-.--', '--', '-', '', 
             'N/A', 'n/a', 'NA', 'na',
             'NULL', 'null', 'Null',
             'undefined', 'UNDEFINED',
@@ -258,7 +257,7 @@ def fetch_team_stats(game_pk: str, max_retries: int) -> list[TeamStats]:
 
     return [TeamStats(**row) for row in rows]
 
-def extract_player_stats(game_pk: str, max_retries: int) -> list[PlayerStats]:
+def fetch_player_stats(game_pk: str, max_retries: int) -> list[PlayerStats]:
     url = f"https://statsapi.mlb.com/api/v1/game/{game_pk}/boxscore"
     resp = retry_request(url, max_retries=max_retries)
     #resp = requests.get(url, timeout=15)
@@ -270,32 +269,56 @@ def extract_player_stats(game_pk: str, max_retries: int) -> list[PlayerStats]:
     for side in teams:
         team_players = data['teams'][side]['players']
 
-        for player_id, player_info in team_players.items():
-            person = player_info['person']
-            stats = player_info.get('stats', {})
+        for player_id, player_data in team_players.items():
+            
+            stats_batting = player_data.get('stats', {}).get('batting', {})
+            stats_pitching = player_data.get('stats', {}).get('pitching', {})
+            stats_fielding = player_data.get('stats', {}).get('fielding', {})
+            
+            row = {
+                "game_pk": game_pk,
+                "team_side": side,
+                "player_id": player_data.get('person',{}).get('id'),
+                "player_name": player_data.get('person',{}).get('fullName'),
 
-            # Initialize stats dictionary with player info
-            player_record = {
-                'game_pk': game_pk,
-                'player_id': person['id'],
-                'player_name': person['fullName'],
-                'team_side': side,
+                # Batting
+                "at_bats": stats_batting.get('atBats'),
+                "runs_score": stats_batting.get('runs'),
+                "hits": stats_batting.get('hits'),
+                "home_runs": stats_batting.get('homeRuns'),
+                "rbis": stats_batting.get('rbi'),
+                "walks_batting": stats_batting.get('baseOnBalls'),
+                "strikeouts_batting": stats_batting.get('strikeOuts'),
+                "left_on_base": stats_batting.get('leftOnBase'),
+                "stolen_bases": stats_batting.get('stolenBases'),
+
+                # Pitching
+                "innings_pitched": stats_pitching.get('inningsPitched'),
+                "hits_allowed": stats_pitching.get('hits'),
+                "runs_allowed": stats_pitching.get('runs'),
+                "earned_runs": stats_pitching.get('earnedRuns'),
+                "strikeouts_pitching": stats_pitching.get('strikeOuts'),
+                "walks_pitching": stats_pitching.get('baseOnBalls'),
+                "pitches_thrown": stats_pitching.get('numberOfPitches'),
+                #"decisions": stats_pitching.get('decision'),
+
+                #Fielding
+                "putouts": stats_fielding.get('putOuts'),
+                "assists": stats_fielding.get('assists'),
+                "errors": stats_fielding.get('errors'),
             }
 
-            # Pitching Stats
-            pitching = stats.get('pitching', {})
-            player_record.update(
-                {
-                    'innings_pitched': pitching.get('inningsPitched'),
-                }
-            )
+            rows.append(row)
+
+    return [PlayerStats(**row) for row in rows]
 
 
 
 if __name__ == "__main__":
     #print(fetch_games(date.today().isoformat())[:2])  # quick sanity check
     #print("\n\n")
-    print(fetch_team_stats(634627, max_retries=3))
+    #print(fetch_team_stats(634627, max_retries=3))
     #print("\n")
     #print(fetch_games_for_date(date.today().isoformat(), max_retries=3))
+    print(fetch_player_stats(634627, max_retries=3))
 
