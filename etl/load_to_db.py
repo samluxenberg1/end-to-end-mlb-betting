@@ -25,7 +25,7 @@ def clean_row(row):
     """
     return {key: (None if val == '' else val) for key, val in row.items()}
 
-def load_games_to_db(csv_path: str, db_config: dict) -> None:
+def load_games_to_db(db_config: dict, data: list = None, from_memory: bool = False, csv_path: str = None) -> None:
     """
     Bulk-insert a csv file of games (from fetch_games) into the `games` table.
     Uses ON CONFLICT DO NOTHING so reruns are idempotent. 
@@ -33,41 +33,57 @@ def load_games_to_db(csv_path: str, db_config: dict) -> None:
     # Connect to Postgres 
     with psycopg2.connect(**db_config) as conn:
         with conn.cursor() as cur:
-            with open(csv_path, newline='', encoding='utf-8') as csvfile:
-                reader = csv.DictReader(csvfile)
-                rows = list(reader)
+            
+            # Determine source of data and prepare rows
+            if not from_memory:
+                if not csv_path:
+                    raise ValueError("csv_path must be provided when from_memory is False")
+                # Load from CSV
+                with open(csv_path, newline='', encoding='utf-8') as csvfile:
+                    reader = csv.DictReader(csvfile)
+                    rows = list(reader)
+            else:
+                if data is None:
+                    raise ValueError("data must be provided when from_memory is True")
+                # Load from memory
+                #rows = [clean_row(row.model_dump()) for row in data] # no pydantic model for games at the moment...
+                rows = [clean_row(row) for row in data]
 
-                if not rows:
-                    logging.warning("No rows found in CSV. Exiting.")
-                    return 
-                
-                columns = [
-                    "game_id", 
-                    "game_date", 
-                    "home_team", 
-                    "away_team", 
-                    "home_score", 
-                    "away_score", 
-                    "state", 
-                    "venue", 
-                    "game_type"
-                    ]
-                
-                values = [[row[col] for col in columns] for row in rows]
+            if not rows:
+                logging.warning("No rows found in CSV. Exiting.")
+                return 
+            
+            columns = [
+                "game_id", 
+                "game_date", 
+                "home_team", 
+                "away_team", 
+                "home_score", 
+                "away_score", 
+                "state", 
+                "venue", 
+                "game_type"
+                ]
+            
+            # Clean rows if they came from CSV
+            if not from_memory:
+                rows = [clean_row(row) for row in rows]
 
-                sql = f"""
-                    INSERT INTO games ({', '.join(columns)})
-                    VALUES %s
-                    ON CONFLICT (game_id) DO NOTHING;
-                """
+            values = [[row[col] for col in columns] for row in rows]
 
-                logging.info(f"Inserting {len(values)} rows into the database...")
-                execute_values(cur, sql, values)
-                conn.commit()
-                logging.info("Insert complete.")
+            sql = f"""
+                INSERT INTO games ({', '.join(columns)})
+                VALUES %s
+                ON CONFLICT (game_id) DO NOTHING;
+            """
+
+            logging.info(f"Inserting {len(values)} rows into the database...")
+            execute_values(cur, sql, values)
+            conn.commit()
+            logging.info("Insert complete.")
 
 
-def load_team_stats_to_db(csv_path: str, db_config: dict) -> None:
+def load_team_stats_to_db(db_config: dict, data: list = None, from_memory: bool =False, csv_path: str = None) -> None:
     """
     Bulk-insert a csv file of team stats (from fetch_team_stats) into the `team_stats` table.
     Uses ON CONFLICT DO NOTHING so reruns are idempotent. 
@@ -75,64 +91,80 @@ def load_team_stats_to_db(csv_path: str, db_config: dict) -> None:
     # Connect to Postgres 
     with psycopg2.connect(**db_config) as conn:
         with conn.cursor() as cur:
-            with open(csv_path, newline='', encoding='utf-8') as csvfile:
-                reader = csv.DictReader(csvfile)
-                rows = list(reader)
 
-                if not rows:
-                    logging.warning("No rows found in CSV. Exiting.")
-                    return 
+            # Determine source of data and prepare rows
+            if not from_memory:
+                if not csv_path:
+                    raise ValueError("csv_path must be provided when from_memory is False")
                 
-                columns = [
-                    "game_pk",
-                    "team_side",
-                    "team_id",
-                    "runs_batting",
-                    "hits_batting",
-                    "strikeOuts_batting",
-                    "baseOnBalls_batting",
-                    "avg",
-                    "obp",
-                    "slg",
-                    "pitchesThrown",
-                    "balls_pitching",
-                    "strikes_pitching",
-                    "strikeOuts_pitching",
-                    "baseOnBalls_pitching",
-                    "hits_pitching",
-                    "earnedRuns",
-                    "homeRuns_pitching",
-                    "runs_pitching",
-                    "era",
-                    "whip",
-                    "groundOuts_pitching",
-                    "airOuts_pitching",
-                    "total",
-                    "putOuts",
-                    "assists",
-                    "errors",
-                    "doublePlays",
-                    "triplePlays",
-                    "rangeFactor",
-                    "caughtStealing",
-                    "passedBall",
-                    "innings"
-                ]
+                # Load from CSV
+                with open(csv_path, newline='', encoding='utf-8') as csvfile:
+                    reader = csv.DictReader(csvfile)
+                    rows = list(reader)
+            else:
+                if data is None:
+                    raise ValueError("data must be provided when from_memory is True")
+                # Load from memory
+                rows = [clean_row(row.model_dump()) for row in data]
+
+            if not rows:
+                logging.warning("No rows found. Exiting.")
+                return 
+            
+            columns = [
+                "game_pk",
+                "team_side",
+                "team_id",
+                "runs_batting",
+                "hits_batting",
+                "strikeOuts_batting",
+                "baseOnBalls_batting",
+                "avg",
+                "obp",
+                "slg",
+                "pitchesThrown",
+                "balls_pitching",
+                "strikes_pitching",
+                "strikeOuts_pitching",
+                "baseOnBalls_pitching",
+                "hits_pitching",
+                "earnedRuns",
+                "homeRuns_pitching",
+                "runs_pitching",
+                "era",
+                "whip",
+                "groundOuts_pitching",
+                "airOuts_pitching",
+                "total",
+                "putOuts",
+                "assists",
+                "errors",
+                "doublePlays",
+                "triplePlays",
+                "rangeFactor",
+                "caughtStealing",
+                "passedBall",
+                "innings"
+            ]
+
+            # Clean rows if they came from CSV (memory objects are already cleaned)
+            if not from_memory:
                 rows = [clean_row(row) for row in rows]
-                values = [[row[col] for col in columns] for row in rows]
+            
+            values = [[row[col] for col in columns] for row in rows]
 
-                sql = f"""
-                    INSERT INTO team_stats ({', '.join(columns)})
-                    VALUES %s
-                    ON CONFLICT (game_pk, team_side) DO NOTHING;
-                """
+            sql = f"""
+                INSERT INTO team_stats ({', '.join(columns)})
+                VALUES %s
+                ON CONFLICT (game_pk, team_side) DO NOTHING;
+            """
 
-                logging.info(f"Inserting {len(values)} rows into the database...")
-                execute_values(cur, sql, values)
-                conn.commit()
-                logging.info("Insert complete.")
+            logging.info(f"Inserting {len(values)} rows into the database...")
+            execute_values(cur, sql, values)
+            conn.commit()
+            logging.info("Insert complete.")
 
-def load_player_stats_to_db(csv_path: str, db_config: dict) -> None:
+def load_player_stats_to_db(db_config: dict, data: list = None, from_memory: bool = False, csv_path: str = None) -> None:
     """
     Bulk-insert a csv file of player stats (from fetch_player_stats) into the `player_stats` table.
     Uses ON CONFLICT DO NOTHING so reruns are idempotent. 
@@ -140,61 +172,77 @@ def load_player_stats_to_db(csv_path: str, db_config: dict) -> None:
     # Connect to Postgres 
     with psycopg2.connect(**db_config) as conn:
         with conn.cursor() as cur:
-            with open(csv_path, newline='', encoding='utf-8') as csvfile:
-                reader = csv.DictReader(csvfile)
-                rows = list(reader)
 
-                if not rows:
-                    logging.warning("No rows found in CSV. Exiting.")
-                    return 
-                
-                columns = [
+            # Determine source of data and prepare rows
+            if not from_memory:
+                if not csv_path:
+                    raise ValueError("csv_path must be provided when from_memory is False")
 
-                    # Game & Player Metadata
-                    "game_pk",
-                    "team_side",
-                    "player_id",
-                    "player_name",
+                # Load from CSV
+                with open(csv_path, newline='', encoding='utf-8') as csvfile:
+                    reader = csv.DictReader(csvfile)
+                    rows = list(reader)
+            else:
+                if data is None:
+                    raise ValueError("data must be provided when from_memory is True")
 
-                    # Batting Stats
-                    "at_bats",  
-                    "runs_scored",
-                    "hits",
-                    "home_runs",
-                    "rbis",
-                    "walks_batting",
-                    "strikeouts_batting",
-                    "left_on_base",
-                    "stolen_bases",
+                # Load from memory
+                rows = [clean_row(row.model_dump()) for row in data]
 
-                    # Pitching Stats
-                    "innings_pitched",
-                    "hits_allowed",
-                    "runs_allowed",
-                    "earned_runs",
-                    "strikeouts_pitching",
-                    "walks_pitching",
-                    "pitches_thrown",
+            if not rows:
+                logging.warning("No rows found in CSV. Exiting.")
+                return 
+            
+            columns = [
 
-                    # Fielding Stats
-                    "putouts",
-                    "assists",
-                    "errors",
-                ]
+                # Game & Player Metadata
+                "game_pk",
+                "team_side",
+                "player_id",
+                "player_name",
 
+                # Batting Stats
+                "at_bats",  
+                "runs_scored",
+                "hits",
+                "home_runs",
+                "rbis",
+                "walks_batting",
+                "strikeouts_batting",
+                "left_on_base",
+                "stolen_bases",
+
+                # Pitching Stats
+                "innings_pitched",
+                "hits_allowed",
+                "runs_allowed",
+                "earned_runs",
+                "strikeouts_pitching",
+                "walks_pitching",
+                "pitches_thrown",
+
+                # Fielding Stats
+                "putouts",
+                "assists",
+                "errors",
+            ]
+
+            # Clean rows if they came from CSV (memory objects are already cleaned)
+            if not from_memory:
                 rows = [clean_row(row) for row in rows]
-                values = [[row[col] for col in columns] for row in rows]
+            
+            values = [[row[col] for col in columns] for row in rows]
 
-                sql = f"""
-                    INSERT INTO player_stats ({', '.join(columns)})
-                    VALUES %s
-                    ON CONFLICT (game_pk, player_id) DO NOTHING;
-                """
+            sql = f"""
+                INSERT INTO player_stats ({', '.join(columns)})
+                VALUES %s
+                ON CONFLICT (game_pk, player_id) DO NOTHING;
+            """
 
-                logging.info(f"Inserting {len(values)} rows into the database...")
-                execute_values(cur, sql, values)
-                conn.commit()
-                logging.info("Insert complete.")
+            logging.info(f"Inserting {len(values)} rows into the database...")
+            execute_values(cur, sql, values)
+            conn.commit()
+            logging.info("Insert complete.")
                 
 
 

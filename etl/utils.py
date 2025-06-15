@@ -1,6 +1,7 @@
 import requests
 import time
 from datetime import date
+import psycopg2
 from pydantic import BaseModel, validator
 from typing import Optional
 import logging
@@ -41,6 +42,17 @@ def retry_request(url: str, max_retries: int = 3, delay: float = 1.0, backoff: f
                 logger.error(f"All retry attempts failed for URL: {url}")
                 raise
 
+def fetch_latest_game_date(db_config: dict) -> date:
+    """Fetches most recent date in games table."""
+    query = "SELECT MAX(game_date) FROM games;"
+
+    with psycopg2.connect(**db_config) as conn:
+        with conn.cursor() as cur:
+            cur.execute(query)
+            result = cur.fetchone()
+            return result[0] if result[0] else date(2021,4,1)
+        
+
 def fetch_games_for_date(date_str: str, max_retries: int) -> list[dict]:
     """
     Scrapes MLB game ids from statsapi.mlb.com given a specified date.
@@ -56,7 +68,19 @@ def fetch_games_for_date(date_str: str, max_retries: int) -> list[dict]:
     resp = retry_request(url, max_retries=max_retries)
     #resp = requests.get(url, timeout=15)
     resp.raise_for_status()
-    games = resp.json()["dates"][0]["games"]
+    data = resp.json()
+
+    # Check if there are any dates with games
+    if not data.get("dates") or len(data["dates"]) == 0:
+        logging.info(f"No games scheduled for {date_str}")
+        return []
+    
+    # Check if the first date has games
+    if "games" not in data["dates"][0]:
+        logging.info(f"No games found for {date_str}")
+        return []
+    
+    games = data["dates"][0]["games"]
     
     return [
         {
@@ -81,7 +105,20 @@ def fetch_games(date_str: str, max_retries: int) -> list[dict]:
     resp = retry_request(url, max_retries=max_retries)
     #resp = requests.get(url, timeout=15)
     resp.raise_for_status()
-    games = resp.json()["dates"][0]["games"]
+    data = resp.json()
+    #games = resp.json()["dates"][0]["games"]
+
+    # Check if there are any dates with games
+    if not data.get("dates") or len(data["dates"]) == 0:
+        logging.info(f"No games scheduled for {date_str}")
+        return []
+
+    # Check if the first date has games
+    if "games" not in data["dates"][0]:
+        logging.info(f"No games found for {date_str}")
+        return []
+    
+    games = data["dates"][0]["games"]
 
     return [
         {
