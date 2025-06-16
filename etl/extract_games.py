@@ -33,7 +33,7 @@ def extract_games(start_str, end_str, output_csv="data/raw_games.csv"):
         date_str = single_date.strftime("%Y-%m-%d")
         try:
             logging.info(f"Fetching games for {date_str}")
-            games = fetch_games(date_str)
+            games = fetch_games(date_str, max_retries=3)
             all_games.extend(games)
 
         except Exception as e:
