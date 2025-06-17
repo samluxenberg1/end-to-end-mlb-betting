@@ -34,10 +34,15 @@ def extract_games(start_str, end_str, output_csv="data/raw_games.csv"):
         try:
             logging.info(f"Fetching games for {date_str}")
             games = fetch_games(date_str, max_retries=3)
+            logging.info(f" --> Found{len(games)} games")
             all_games.extend(games)
 
         except Exception as e:
             logging.warning(f"Failed to fetch games for {date_str}: {e}")
+    
+    if not all_games:
+        logging.warning("No games fetched. CSV file will not be written.")
+        return []
 
     # Save to CSV
     os.makedirs("data", exist_ok=True)

@@ -4,6 +4,8 @@
 CREATE TABLE IF NOT EXISTS games (
     game_id      INTEGER PRIMARY KEY,
     game_date    DATE,
+    home_team_id INTEGER,
+    away_team_id INTEGER,
     home_team    TEXT,
     away_team    TEXT,
     home_score   INTEGER,
@@ -51,9 +53,9 @@ CREATE TABLE IF NOT EXISTS team_stats (
 );
 
 CREATE TABLE IF NOT EXISTS player_stats (
-    game_pk INTEGER NOT NULL,
-    team_side TEXT NOT NULL,          -- 'home' or 'away'
-    player_id INTEGER NOT NULL,
+    game_pk INTEGER,
+    team_side TEXT,          -- 'home' or 'away'
+    player_id INTEGER,
     player_name TEXT,
 
     -- Batting

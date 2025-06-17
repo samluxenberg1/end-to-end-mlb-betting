@@ -126,6 +126,8 @@ def fetch_games(date_str: str, max_retries: int) -> list[dict]:
             "game_date": date_str,
             "home_team": g["teams"]["home"]["team"]["name"],
             "away_team": g["teams"]["away"]["team"]["name"],
+            "home_team_id": g.get("teams", {}).get("home", {}).get("team", {}).get("id"),
+            "away_team_id": g.get("teams", {}).get("away", {}).get("team", {}).get("id"),
             #"home_score": g["teams"]["home"]["score"],
             "home_score": g.get("teams", {}).get("home", {}).get("score"),
             #"away_score": g["teams"]["away"]["score"],
