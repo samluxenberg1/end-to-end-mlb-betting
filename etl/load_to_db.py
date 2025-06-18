@@ -200,6 +200,7 @@ def load_player_stats_to_db(db_config: dict, data: list = None, from_memory: boo
                 # Game & Player Metadata
                 "game_pk",
                 "team_side",
+                "team_id",
                 "player_id",
                 "player_name",
 

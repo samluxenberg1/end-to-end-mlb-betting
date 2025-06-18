@@ -54,6 +54,7 @@ CREATE TABLE IF NOT EXISTS team_stats (
 
 CREATE TABLE IF NOT EXISTS player_stats (
     game_pk INTEGER,
+    team_id INTEGER,
     team_side TEXT,          -- 'home' or 'away'
     player_id INTEGER,
     player_name TEXT,

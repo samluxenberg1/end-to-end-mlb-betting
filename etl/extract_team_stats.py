@@ -58,7 +58,7 @@ def extract_team_stats(start_str, end_str, output_csv="data/raw_team_stats.csv")
         writer.writeheader()
         writer.writerows([team_stat.model_dump() for team_stat in all_team_stats])
 
-    logging.info(f"Saved {len(all_team_stats)} games to {output_csv}")
+    logging.info(f"Saved {len(all_team_stats)} teams to {output_csv}")
 
     return all_team_stats
 

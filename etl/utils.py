@@ -144,6 +144,7 @@ class PlayerStats(BaseModel):
     player_id: Optional[int] = None
     player_name: Optional[str] = None
     team_side: Optional[str] = None  # 'home' or 'away'
+    team_id: Optional[int] = None
 
     # Pitching stats
     innings_pitched: Optional[float] = None
@@ -308,6 +309,7 @@ def fetch_player_stats(game_pk: str, max_retries: int) -> list[PlayerStats]:
     rows = []
 
     for side in teams:
+        team_id = data['teams'][side]['team']['id']
         team_players = data['teams'][side]['players']
 
         for player_id, player_data in team_players.items():
@@ -318,6 +320,7 @@ def fetch_player_stats(game_pk: str, max_retries: int) -> list[PlayerStats]:
             
             row = {
                 "game_pk": game_pk,
+                "team_id": team_id,
                 "team_side": side,
                 "player_id": player_data.get('person',{}).get('id'),
                 "player_name": player_data.get('person',{}).get('fullName'),

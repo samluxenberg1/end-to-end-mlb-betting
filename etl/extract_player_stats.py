@@ -62,7 +62,7 @@ def extract_player_stats(start_str, end_str, output_csv="data/raw_player_stats.c
         writer.writeheader()
         writer.writerows([player_stat.model_dump() for player_stat in all_player_stats])
 
-    logging.info(f"Saved {len(all_player_stats)} games to {output_csv}")
+    logging.info(f"Saved {len(all_player_stats)} players to {output_csv}")
 
     return all_player_stats
 
