@@ -86,3 +86,13 @@ CREATE TABLE IF NOT EXISTS player_stats (
 
     PRIMARY KEY (game_pk, player_id)
 );
+
+CREATE TABLE IF NOT EXISTS game_odds (
+    game_id INTEGER PRIMARY KEY REFERENCES games(game_id),
+    sportsbook TEXT NOT NULL,
+    market_type TEXT NOT NULL DEFAULT 'h2h',
+    home_price INTEGER, -- American odds
+    away_price INTEGER, -- American odds
+    fetched_at TIMESTAMP NOT NULL
+    UNIQUE(game_id, sportsbook, market_type)
+);

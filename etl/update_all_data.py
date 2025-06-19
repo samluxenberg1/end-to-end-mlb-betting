@@ -21,7 +21,16 @@ def daterange(start_date: date, end_date: date):
         current += timedelta(days=1)
 
 def update_all_data(db_config: dict, max_retries: int):
+    """
+    Fetches the latest game, team, and player data for all games after latest game date in games table in DB.
+
+    Args
+        db_cong: database configuration dictionary
+        max_retries: number of retry requests when fetching from MLB Stats API
+    """
     logging.basicConfig(level=logging.INFO)
+    
+    # Find date to start fetching new data
     today = date.today()
     latest_date = fetch_latest_game_date(db_config)
 
@@ -29,6 +38,8 @@ def update_all_data(db_config: dict, max_retries: int):
 
     all_games, all_team_stats, all_player_stats = [], [], []
 
+    # For each date range from latest date in games table until today,
+    # fetch all games and team/player stats from each of those games.
     for single_date in daterange(latest_date+timedelta(days=1), today):
         single_date_str = single_date.strftime("%Y-%m-%d")
         try:
