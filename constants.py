@@ -18,3 +18,7 @@ L = League Championship Series
 
 W = World Series
 """
+
+historical_odds_api_endpoint = f"https://api.the-odds-api.com/v4/historical/sports/baseball_mlb/odds/?apiKey={YOUR_KEY}&regions=us&markets=h2h&oddsFormat=american&date=2021-10-18T12:00:00Z"
+HIST_URL = "https://api.the-odds-api.com/v4/historical/sports/baseball_mlb/odds"
+NEW_URL = ""
