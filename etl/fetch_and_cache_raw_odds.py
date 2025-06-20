@@ -13,9 +13,6 @@ API_KEY = os.getenv("ODDS_API_KEY")
 HIST_URL = "https://api.the-odds-api.com/v4/historical/sports/baseball_mlb/odds"
 
 
-def get_final_pregame_odds(bookmakers, commence_time_str):
-    commence_time_dt = datetime.fromisoformat(commence_time_str.replace("Z", "+00:00"))
-
 def fetch_raw_odds_for_date(date_str: str): 
     params = {
         "apiKey": API_KEY,
