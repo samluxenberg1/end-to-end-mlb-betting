@@ -34,7 +34,7 @@ def extract_games(start_str, end_str, output_csv="data/raw_games.csv"):
         try:
             logging.info(f"Fetching games for {date_str}")
             games = fetch_games(date_str, max_retries=3)
-            logging.info(f" --> Found{len(games)} games")
+            logging.info(f" --> Found {len(games)} games")
             all_games.extend(games)
 
         except Exception as e:

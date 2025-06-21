@@ -10,6 +10,112 @@ import logging
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
+class TeamStats(BaseModel):
+    # All fields as Optional to handle None values gracefully
+    game_pk: Optional[int] = None
+    team_side: Optional[str] = None
+    team_id: Optional[int] = None
+    runs_batting: Optional[int] = None
+    hits_batting: Optional[int] = None
+    strikeOuts_batting: Optional[int] = None
+    baseOnBalls_batting: Optional[int] = None
+    avg: Optional[float] = None
+    obp: Optional[float] = None
+    slg: Optional[float] = None
+    pitchesThrown: Optional[int] = None
+    balls_pitching: Optional[int] = None
+    strikes_pitching: Optional[int] = None
+    strikeOuts_pitching: Optional[int] = None
+    baseOnBalls_pitching: Optional[int] = None
+    hits_pitching: Optional[int] = None
+    earnedRuns: Optional[int] = None
+    homeRuns_pitching: Optional[int] = None
+    runs_pitching: Optional[int] = None
+    era: Optional[float] = None
+    whip: Optional[float] = None
+    groundOuts_pitching: Optional[int] = None
+    airOuts_pitching: Optional[int] = None
+    total: Optional[int] = None
+    putOuts: Optional[int] = None
+    assists: Optional[int] = None
+    errors: Optional[int] = None
+    doublePlays: Optional[int] = None
+    triplePlays: Optional[int] = None
+    rangeFactor: Optional[float] = None
+    caughtStealing: Optional[int] = None
+    passedBall: Optional[int] = None
+    innings: Optional[float] = None
+
+    @validator('*', pre=True)
+    def clean_all_fields(cls, v): 
+        """Convert any problematic values to None"""
+
+        problem_values = {
+            '-.--', '--', '-', '', 
+            'N/A', 'n/a', 'NA', 'na',
+            'NULL', 'null', 'Null',
+            'undefined', 'UNDEFINED',
+            None
+        }
+
+        if v in problem_values:
+            return None
+        
+        # If it's a string, make sure it's not whitespace
+        if isinstance(v, str) and v.strip() == '':
+            return None
+        
+        return v
+
+class PlayerStats(BaseModel):
+    game_pk: Optional[int] = None
+    player_id: Optional[int] = None
+    player_name: Optional[str] = None
+    team_side: Optional[str] = None  # 'home' or 'away'
+    team_id: Optional[int] = None
+
+    # Pitching stats
+    innings_pitched: Optional[float] = None
+    hits_allowed: Optional[int] = None
+    runs_allowed: Optional[int] = None
+    earned_runs: Optional[int] = None
+    strikeouts_pitching: Optional[int] = None
+    walks_pitching: Optional[int] = None
+    pitches_thrown: Optional[int] = None
+
+    # Batting stats
+    at_bats: Optional[int] = None
+    runs_scored: Optional[int] = None
+    hits: Optional[int] = None
+    home_runs: Optional[int] = None
+    rbis: Optional[int] = None
+    walks_batting: Optional[int] = None
+    strikeouts_batting: Optional[int] = None
+    left_on_base: Optional[int] = None
+    stolen_bases: Optional[int] = None
+
+    # Fielding stats
+    putouts: Optional[int] = None
+    assists: Optional[int] = None
+    errors: Optional[int] = None
+
+    @validator('*', pre=True)
+    def clean_all_fields(cls, v):
+        problem_values = {
+            '.---','-.--', '--', '-', '', 
+            'N/A', 'n/a', 'NA', 'na',
+            'NULL', 'null', 'Null',
+            'undefined', 'UNDEFINED',
+            None
+        }
+        if v in problem_values:
+            return None
+        if isinstance(v, str) and v.strip() == '':
+            return None
+        return v
+
+
+
 def retry_request(url: str, max_retries: int = 3, delay: float = 1.0, backoff: float = 2.0, timeout: int = 15) -> requests.Response:
     """
     Make HTTP request with exponential backoff retry logic.
@@ -124,6 +230,7 @@ def fetch_games(date_str: str, max_retries: int) -> list[dict]:
         {
             "game_id": str(g.get("gamePk")),
             "game_date": date_str,
+            "game_date_time": g.get("gameDate"),
             "home_team": g["teams"]["home"]["team"]["name"],
             "away_team": g["teams"]["away"]["team"]["name"],
             "home_team_id": g.get("teams", {}).get("home", {}).get("team", {}).get("id"),
@@ -138,110 +245,6 @@ def fetch_games(date_str: str, max_retries: int) -> list[dict]:
         }
         for g in games
     ]
-
-class PlayerStats(BaseModel):
-    game_pk: Optional[int] = None
-    player_id: Optional[int] = None
-    player_name: Optional[str] = None
-    team_side: Optional[str] = None  # 'home' or 'away'
-    team_id: Optional[int] = None
-
-    # Pitching stats
-    innings_pitched: Optional[float] = None
-    hits_allowed: Optional[int] = None
-    runs_allowed: Optional[int] = None
-    earned_runs: Optional[int] = None
-    strikeouts_pitching: Optional[int] = None
-    walks_pitching: Optional[int] = None
-    pitches_thrown: Optional[int] = None
-
-    # Batting stats
-    at_bats: Optional[int] = None
-    runs_scored: Optional[int] = None
-    hits: Optional[int] = None
-    home_runs: Optional[int] = None
-    rbis: Optional[int] = None
-    walks_batting: Optional[int] = None
-    strikeouts_batting: Optional[int] = None
-    left_on_base: Optional[int] = None
-    stolen_bases: Optional[int] = None
-
-    # Fielding stats
-    putouts: Optional[int] = None
-    assists: Optional[int] = None
-    errors: Optional[int] = None
-
-    @validator('*', pre=True)
-    def clean_all_fields(cls, v):
-        problem_values = {
-            '.---','-.--', '--', '-', '', 
-            'N/A', 'n/a', 'NA', 'na',
-            'NULL', 'null', 'Null',
-            'undefined', 'UNDEFINED',
-            None
-        }
-        if v in problem_values:
-            return None
-        if isinstance(v, str) and v.strip() == '':
-            return None
-        return v
-
-class TeamStats(BaseModel):
-    # All fields as Optional to handle None values gracefully
-    game_pk: Optional[int] = None
-    team_side: Optional[str] = None
-    team_id: Optional[int] = None
-    runs_batting: Optional[int] = None
-    hits_batting: Optional[int] = None
-    strikeOuts_batting: Optional[int] = None
-    baseOnBalls_batting: Optional[int] = None
-    avg: Optional[float] = None
-    obp: Optional[float] = None
-    slg: Optional[float] = None
-    pitchesThrown: Optional[int] = None
-    balls_pitching: Optional[int] = None
-    strikes_pitching: Optional[int] = None
-    strikeOuts_pitching: Optional[int] = None
-    baseOnBalls_pitching: Optional[int] = None
-    hits_pitching: Optional[int] = None
-    earnedRuns: Optional[int] = None
-    homeRuns_pitching: Optional[int] = None
-    runs_pitching: Optional[int] = None
-    era: Optional[float] = None
-    whip: Optional[float] = None
-    groundOuts_pitching: Optional[int] = None
-    airOuts_pitching: Optional[int] = None
-    total: Optional[int] = None
-    putOuts: Optional[int] = None
-    assists: Optional[int] = None
-    errors: Optional[int] = None
-    doublePlays: Optional[int] = None
-    triplePlays: Optional[int] = None
-    rangeFactor: Optional[float] = None
-    caughtStealing: Optional[int] = None
-    passedBall: Optional[int] = None
-    innings: Optional[float] = None
-
-    @validator('*', pre=True)
-    def clean_all_fields(cls, v): 
-        """Convert any problematic values to None"""
-
-        problem_values = {
-            '-.--', '--', '-', '', 
-            'N/A', 'n/a', 'NA', 'na',
-            'NULL', 'null', 'Null',
-            'undefined', 'UNDEFINED',
-            None
-        }
-
-        if v in problem_values:
-            return None
-        
-        # If it's a string, make sure it's not whitespace
-        if isinstance(v, str) and v.strip() == '':
-            return None
-        
-        return v
 
 def fetch_team_stats(game_pk: str, max_retries: int) -> list[TeamStats]:
     url = f"https://statsapi.mlb.com/api/v1/game/{game_pk}/boxscore"
@@ -357,11 +360,13 @@ def fetch_player_stats(game_pk: str, max_retries: int) -> list[PlayerStats]:
 
 
 
+
+
 if __name__ == "__main__":
-    #print(fetch_games(date.today().isoformat())[:2])  # quick sanity check
+    print(fetch_games(date.today().isoformat(), max_retries=3)[:2])  # quick sanity check
     #print("\n\n")
     #print(fetch_team_stats(634627, max_retries=3))
     #print("\n")
     #print(fetch_games_for_date(date.today().isoformat(), max_retries=3))
-    print(fetch_player_stats(634627, max_retries=3))
+    #print(fetch_player_stats(634627, max_retries=3))
 

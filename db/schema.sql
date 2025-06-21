@@ -4,6 +4,7 @@
 CREATE TABLE IF NOT EXISTS games (
     game_id      INTEGER PRIMARY KEY,
     game_date    DATE,
+    game_date_time  TIMESTAMPTZ,
     home_team_id INTEGER,
     away_team_id INTEGER,
     home_team    TEXT,
@@ -86,7 +87,7 @@ CREATE TABLE IF NOT EXISTS player_stats (
 
     PRIMARY KEY (game_pk, player_id)
 );
-
+/*
 CREATE TABLE IF NOT EXISTS game_odds (
     game_id INTEGER PRIMARY KEY REFERENCES games(game_id),
     sportsbook TEXT NOT NULL,
@@ -96,3 +97,4 @@ CREATE TABLE IF NOT EXISTS game_odds (
     fetched_at TIMESTAMP NOT NULL
     UNIQUE(game_id, sportsbook, market_type)
 );
+*/

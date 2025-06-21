@@ -56,6 +56,7 @@ def load_games_to_db(db_config: dict, data: list = None, from_memory: bool = Fal
             columns = [
                 "game_id", 
                 "game_date",
+                "game_date_time",
                 "home_team_id",
                 "away_team_id", 
                 "home_team", 
