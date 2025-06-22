@@ -26,6 +26,7 @@ While this is a personal project, which I plan to test out with "skin in the gam
 Another aim of this project is to gain additional experience in Docker, ETL/ELT, and deployment to supplement my current role as a data scientist. 
 
 ## 🗂️ Project Structure
+```
 end-to-end-mlb-betting/
 ├── data/
 │   ├── raw_games.csv
@@ -56,6 +57,7 @@ end-to-end-mlb-betting/
 │   ├── mlflow_config
 ├── validate/
 │   └── run_data_checks.py
+```
 
 ## ⚾ Data Sources
 - MLBStats API
