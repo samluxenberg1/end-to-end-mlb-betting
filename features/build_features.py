@@ -18,13 +18,12 @@ def build_features():
     # Step 3: Load player stats data
 
     # Step 4: Feature engineering
-
+    # Convert to datetime
+    df['game_date'] = pd.to_datetime(df['game_date'])
+    df['game_date_time'] = pd.to_datetime(df['game_date_time'])
+    
     ## Feature engineering on games --> need to adjust for only prior game information (can't predict win/loss of current game using current game score)
-    df['run_diff'] = df['home_score'] - df['away_score']
-    df['total_runs'] = df['home_score'] + df['away_score']
 
-    df['game_month'] = pd.to_datetime(df['game_date']).dt.month
-    df['game_day_of_week'] = pd.to_datetime(df['game_date']).dt.dayofweek
 
     ## Feature engineering on team stats
 
@@ -42,14 +41,17 @@ def build_features():
     # Step 4: Drop any columns not needed for modeling
     #df_model = df.drop(columns=['xxx','yyy'])
     
-    #return df_model
+    return df#_model
 
 if __name__=='__main__':
     
     output_csv = 'data/processed/model_data.csv'
     df_model = build_features()
-    df_model.to_csv(output_csv, index=False)
-    print(f"Saved {len(df_model)} rows and {len(df_model.columns)} columns to {output_csv}")
+    d = df_model.head()
+    print(d.head())
+    print(pd.to_datetime(d['game_date_time']).dt.hour)
+    #df_model.to_csv(output_csv, index=False)
+    #print(f"Saved {len(df_model)} rows and {len(df_model.columns)} columns to {output_csv}")
 
 
 
