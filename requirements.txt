@@ -4,3 +4,4 @@ requests
 psycopg2-binary  # psql driver
 sqlalchemy
 python-dotenv
+pytest

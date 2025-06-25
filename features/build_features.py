@@ -13,6 +13,8 @@ def build_features():
     # Step 1: Load games data
     df = load_games_from_db()
 
+    
+
     # Step 2: Load team stats data
     
     # Step 3: Load player stats data
@@ -21,7 +23,14 @@ def build_features():
     # Convert to datetime
     df['game_date'] = pd.to_datetime(df['game_date'])
     df['game_date_time'] = pd.to_datetime(df['game_date_time'])
-    
+
+    # Rename teams whose names changed
+    df.loc[df['home_team']=='Cleveland Indians', 'home_team'] = 'Cleveland Guardians'
+    df.loc[df['away_team']=='Cleveland Indians', 'away_team'] = 'Cleveland Guardians'
+
+    df.loc[df['home_team']=='Athletics', 'home_team'] = 'Oakland Athletics'
+    df.loc[df['away_team']=='Athletics', 'away_team'] = 'Oakland Athletics'
+
     ## Feature engineering on games --> need to adjust for only prior game information (can't predict win/loss of current game using current game score)
 
 

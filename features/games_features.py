@@ -1,6 +1,57 @@
 from typing import Literal
 import pandas as pd
 
+def team_schedule(
+    df: pd.DataFrame, 
+    date_col: str = 'game_date', 
+    date_time_col: str = 'game_date_time'
+) -> pd.DataFrame:
+     
+    """
+    Transform a games DataFrame into a team-centric schedule view.
+    
+    Takes a DataFrame with game data (home_team vs away_team format) and converts it
+    into a schedule where each row represents one team's game, with an indicator
+    for whether they played at home or away.
+    
+    Args:
+        df (pd.DataFrame): DataFrame containing game data with columns:
+            - 'home_team': Name of the home team
+            - 'away_team': Name of the away team
+            - date_col: Column name containing game dates
+            - date_time_col: Column name containing game datetime stamps
+        date_col (str, optional): Name of the date column. Defaults to 'game_date'.
+        date_time_col (str, optional): Name of the datetime column. Defaults to 'game_date_time'.
+    
+    Returns:
+        pd.DataFrame: Team schedule DataFrame with columns:
+            - 'team': Team name
+            - date_col: Game date (same as input)
+            - date_time_col: Game datetime (same as input)
+            - 'home_ind': Binary indicator (1 if home game, 0 if away game)
+            
+        The DataFrame is sorted by team name and then by game datetime.
+     """
+    # Extract home and away games for every team
+    home_schedule = (
+        df[['home_team',date_col, date_time_col]]
+        .rename(columns={'home_team': 'team'})
+        .assign(home_ind=1)
+    )
+    away_schedule = (
+        df[['away_team', date_col, date_time_col]]
+        .rename(columns={'away_team': 'team'})
+        .assign(home_ind=0)
+    )
+
+    # Join them into one 'team' column
+    team_schedule = (
+        pd.concat([home_schedule, away_schedule])
+        .sort_values(['team',date_time_col])
+    )
+
+    return team_schedule
+
 def team_rest_days(
         df: pd.DataFrame,
         team: Literal['home','away'],
