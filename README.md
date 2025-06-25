@@ -53,6 +53,8 @@ end-to-end-mlb-betting/
 ├── serving/
 │   ├── api.py
 │   ├── Dockerfile
+├── tests/
+    ├── test_features.py
 ├── tracking/
 │   ├── mlflow_config
 ├── validate/
