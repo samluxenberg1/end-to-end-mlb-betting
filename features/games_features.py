@@ -54,7 +54,6 @@ def team_schedule(
 
 def team_rest_days(
         df: pd.DataFrame,
-        team: Literal['home','away'],
         date_time_col: str = 'game_date_time',
         date_col: str = 'game_date'
         ) -> pd.Series:
@@ -84,11 +83,12 @@ def team_rest_days(
         Series with the same index as input DataFrame containing the number of
         rest days for each game. First game for each team will have 0 rest days.
     """
-    team_col = f"{team}_team"
+    #team_col = f"{team}_team"
+    df_team_sched = team_schedule(df)
     return (
-        df
-        .sort_values(date_time_col)
-        .groupby(team_col)[date_col]
+        df_team_sched
+        #.sort_values(['team',date_time_col])
+        .groupby('team')[date_col]
         .diff()
         .dt.days
         .fillna(value=0)
