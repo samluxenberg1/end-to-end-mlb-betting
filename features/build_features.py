@@ -1,6 +1,7 @@
 import pandas as pd
 
 from load_games_from_db import load_games_from_db
+from games_features import create_game_features
 """
 Plan: 
 
@@ -31,8 +32,8 @@ def build_features():
     df.loc[df['home_team']=='Athletics', 'home_team'] = 'Oakland Athletics'
     df.loc[df['away_team']=='Athletics', 'away_team'] = 'Oakland Athletics'
 
-    ## Feature engineering on games --> need to adjust for only prior game information (can't predict win/loss of current game using current game score)
-
+    ## Feature engineering on games 
+    df = create_game_features(df, date_col='game_date',date_time_col='game_date_time')
 
     ## Feature engineering on team stats
 
@@ -58,7 +59,7 @@ if __name__=='__main__':
     df_model = build_features()
     d = df_model.head()
     print(d.head())
-    print(pd.to_datetime(d['game_date_time']).dt.hour)
+    
     #df_model.to_csv(output_csv, index=False)
     #print(f"Saved {len(df_model)} rows and {len(df_model.columns)} columns to {output_csv}")
 

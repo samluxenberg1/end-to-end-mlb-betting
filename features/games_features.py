@@ -1,6 +1,4 @@
-from typing import Literal
 import pandas as pd
-from datetime import timedelta
 
 def team_schedule(
     df: pd.DataFrame, 
@@ -34,14 +32,25 @@ def team_schedule(
         The DataFrame is sorted by team name and then by game datetime.
      """
     # Extract home and away games for every team
+    common_cols = [date_col, date_time_col, 'home_score','away_score']
+    home_cols = ['home_team'] + common_cols
     home_schedule = (
-        df[['home_team',date_col, date_time_col]]
-        .rename(columns={'home_team': 'team'})
+        df[home_cols]
+        .rename(columns={
+            'home_team': 'team',
+            'home_score': 'team_score',
+            'away_score': 'opp_score'
+        })
         .assign(home_ind=1)
     )
+    away_cols = ['away_team'] + common_cols
     away_schedule = (
-        df[['away_team', date_col, date_time_col]]
-        .rename(columns={'away_team': 'team'})
+        df[away_cols]
+        .rename(columns={
+            'away_team': 'team',
+            'home_score': 'opp_score',
+            'away_score': 'team_score'
+        })
         .assign(home_ind=0)
     )
 
@@ -50,6 +59,12 @@ def team_schedule(
         pd.concat([home_schedule, away_schedule])
         .sort_values(['team',date_time_col])
     )
+
+    # Create team win column
+    team_schedule['team_win'] = (team_schedule['team_score'] > team_schedule['opp_score']).astype(int)
+
+    # Create run differential column (team_score - opp_score)
+    team_schedule['team_run_diff'] = team_schedule['team_score'] - team_schedule['opp_score']
 
     return team_schedule
 
@@ -124,56 +139,200 @@ def team_games_previous_7days(
         rolling average of rest days for each team and game.
     """
     df_team_sched = team_schedule(df, date_time_col=date_time_col, date_col=date_col)
-    df_team_sched['yesterday_date'] = df_team_sched['game_date']-timedelta(days=1)
+    
     return (
         df_team_sched
         .groupby('team')
-        .rolling(window='7D', on='yesterday_date')
+        .rolling(window='7D', on=date_time_col, min_periods=1, closed='left')
         .count()['game_date']
-        .reset_index(drop=True)
+        .fillna(value=0)
+        .reset_index(drop=True,level=0)
     )
-    
-def create_rest_features(df: pd.DataFrame) -> pd.DataFrame:
-    """
-    Create comprehensive rest-related features for both home and away teams.
-    
-    This function generates multiple rest-based features that can be used for
-    analysis or modeling, including rest days, back-to-back indicators,
-    rolling averages, and relative rest advantages between teams.
-    
-    Parameters
-    ----------
-    df : pd.DataFrame
-        Input DataFrame containing game data. Must include 'home_team', 'away_team',
-        'game_date_time', and 'game_date' columns.
-        
-    Returns
-    -------
-    pd.DataFrame
-        Original DataFrame with the following new columns added:
-        - 'home_rest_days': Days of rest for home team before each game
-        - 'away_rest_days': Days of rest for away team before each game  
-        - 'home_back2back': Binary indicator (1 if home team has ≤1 rest day)
-        - 'away_back2back': Binary indicator (1 if away team has ≤1 rest day)
-        - 'home_rest_7day_avg': 7-game rolling average of home team rest days
-        - 'away_rest_7day_avg': 7-game rolling average of away team rest days
-        - 'rest_difference': Home rest days minus away rest days
-    """
-    df['home_rest_days'] = team_rest_days(df, team='home')
-    df['away_rest_days'] = team_rest_days(df, team='away')
+def merge_team_features_into_games(df_games: pd.DataFrame, df_team_schedule: pd.DataFrame, team_schedule_cols: list[str], date_time_col: str = 'game_date_time'):
+    # Home Merge
+    df_games = df_games.merge(
+        df_team_schedule[team_schedule_cols + [date_time_col]],
+        how='left',
+        left_on=['home_team', date_time_col],
+        right_on=['team', date_time_col]
+    )
+    df_games.drop('team', axis=1, inplace=True)
+    home_cols_rename = {col: f'home_{col}' for col in team_schedule_cols}
+    df_games.rename(columns=home_cols_rename, inplace=True)
 
-    df['home_back2back'] = (df['home_rest_days'] <= 1).astype(int)
-    df['away_back2back'] = (df['away_rest_days'] <= 1).astype(int)
+    # Away Merge
+    df_games = df_games.merge(
+        df_team_schedule[team_schedule_cols + [date_time_col]],
+        how='left',
+        left_on=['away_team',date_time_col],
+        right_on=['team',date_time_col]
+    )
+    df_games.drop('team', axis=1, inplace=True)
+    away_cols_rename = {col: f'away_{col}' for col in team_schedule_cols}
+    df_games.rename(columns=away_cols_rename, inplace=True)
 
-    df['home_rest_7day_avg'] = team_rest_7day_avg(df, team='home')
-    df['away_rest_7day_avg'] = team_rest_7day_avg(df, team='away')
+    return df_games
 
-    df['rest_difference'] = df['home_rest_days'] - df['away_rest_days']
+def get_schedule_features(df: pd.DataFrame, date_col: str = 'game_date', date_time_col: str = 'game_date_time'):
+    # create team schedule data
+    df_team_sched = team_schedule(df, date_col=date_col, date_time_col=date_time_col)
+    # add team_rest_days
+    df_team_sched['team_rest_days'] = team_rest_days(df)
+    # add rest_days_7day_avg
+    df_team_sched['team_games_prev_7days'] = team_games_previous_7days(df)
 
-    return df
+    # Merge
+    team_schedule_cols = ['team','team_rest_days','team_games_prev_7days'] # no date_time_col here -- add separately
+    df_games = merge_team_features_into_games(
+        df_games=df, 
+        df_team_schedule=df_team_sched,
+        team_schedule_cols=team_schedule_cols, 
+        date_time_col=date_time_col
+        )
 
+    return df_games
 
-def create_date_time_features(df: pd.DataFrame) -> pd.DataFrame:
+def team_win_rate_last_10(
+    df: pd.DataFrame,
+    date_col: str = 'game_date',
+    date_time_col: str = 'game_date_time'
+):
+    df_team_sched = team_schedule(df,date_time_col=date_time_col, date_col=date_col)
+    return (
+        df_team_sched
+        .groupby('team')['team_win']
+        .rolling(window=10, min_periods=1, closed='left')
+        .mean()
+        .fillna(value=0)
+        .reset_index(drop=True, level=0)
+    )
+
+def team_avg_run_diff_last_10(
+        df: pd.DataFrame,
+        date_col: str = 'game_date',
+        date_time_col: str = 'game_date_time'
+):
+    df_team_sched = team_schedule(df, date_time_col=date_time_col, date_col=date_col)
+    return (
+        df_team_sched
+        .groupby('team')['team_run_diff']
+        .rolling(window=10, min_periods=1, closed='left')
+        .mean()
+        .fillna(value=0)
+        .reset_index(drop=True, level=0)
+    )
+def team_std_run_diff_last_10(
+        df: pd.DataFrame,
+        date_col: str = 'game_date',
+        date_time_col: str = 'game_date_time'
+):
+    df_team_sched = team_schedule(df, date_time_col=date_time_col, date_col=date_col)
+    return (
+        df_team_sched
+        .groupby('team')['team_run_diff']
+        .rolling(window=10, min_periods=1, closed='left')
+        .std()
+        .fillna(value=0)
+        .reset_index(drop=True, level=0)
+    )
+def team_avg_runs_score_last_10(
+        df: pd.DataFrame,
+        date_col: str = 'game_date',
+        date_time_col: str = 'game_date_time'
+):
+    df_team_sched = team_schedule(df, date_time_col=date_time_col, date_col=date_col)
+    return (
+        df_team_sched
+        .groupby('team')['team_score']
+        .rolling(window=10, min_periods=1, closed='left')
+        .mean()
+        .fillna(value=0)
+        .reset_index(drop=True, level=0)
+    ) 
+def team_std_runs_score_last_10(
+        df: pd.DataFrame,
+        date_col: str = 'game_date',
+        date_time_col: str = 'game_date_time'
+):
+    df_team_sched = team_schedule(df, date_time_col=date_time_col, date_col=date_col)
+    return (
+        df_team_sched
+        .groupby('team')['team_score']
+        .rolling(window=10, min_periods=1, closed='left')
+        .std()
+        .fillna(value=0)
+        .reset_index(drop=True, level=0)
+    ) 
+def team_avg_runs_allowed_last_10(
+        df: pd.DataFrame,
+        date_col: str = 'game_date',
+        date_time_col: str = 'game_date_time'
+):
+    df_team_sched = team_schedule(df, date_time_col=date_time_col, date_col=date_col)
+    return (
+        df_team_sched
+        .groupby('team')['opp_score']
+        .rolling(window=10, min_periods=1, closed='left')
+        .mean()
+        .fillna(value=0)
+        .reset_index(drop=True, level=0)
+    ) 
+def team_std_runs_allowed_last_10(
+        df: pd.DataFrame,
+        date_col: str = 'game_date',
+        date_time_col: str = 'game_date_time'
+):
+    df_team_sched = team_schedule(df, date_time_col=date_time_col, date_col=date_col)
+    return (
+        df_team_sched
+        .groupby('team')['opp_score']
+        .rolling(window=10, min_periods=1, closed='left')
+        .std()
+        .fillna(value=0)
+        .reset_index(drop=True, level=0)
+    ) 
+
+def get_outcome_features(
+        df: pd.DataFrame,
+        date_col: str = 'game_date',
+        date_time_col: str = 'game_date_time'
+):
+    # Create team schedule
+    df_team_sched = team_schedule(df, date_time_col=date_time_col, date_col=date_col)
+
+    # Win rate last 10 games
+    df_team_sched['win_rate_last_10'] = team_win_rate_last_10(df, date_time_col=date_time_col, date_col=date_col)
+
+    # Run differential last 10 games
+    df_team_sched['avg_run_diff_last_10'] = team_avg_run_diff_last_10(df, date_time_col=date_time_col, date_col=date_col)
+    df_team_sched['std_run_diff_last_10'] = team_std_run_diff_last_10(df, date_time_col=date_time_col, date_col=date_col)
+
+    # Runs scored last 10 games
+    df_team_sched['avg_runs_scored_last_10'] = team_avg_runs_score_last_10(df, date_time_col=date_time_col, date_col=date_col)
+    df_team_sched['std_runs_scored_last_10'] = team_std_runs_score_last_10(df, date_time_col=date_time_col, date_col=date_col)
+
+    # Runs allowed last 10 games
+    df_team_sched['avg_runs_allowed_last_10'] = team_avg_runs_allowed_last_10(df, date_time_col=date_time_col, date_col=date_col)
+    df_team_sched['std_runs_allowed_last_10'] = team_std_runs_allowed_last_10(df, date_time_col=date_time_col, date_col=date_col)
+
+    # Merge
+    team_schedule_cols = [
+        'team', 
+        'win_rate_last_10',
+        'avg_run_diff_last_10','std_run_diff_last_10',
+        'avg_runs_scored_last_10','std_runs_scored_last_10',
+        'avg_runs_allowed_last_10','std_runs_allowed_last_10'
+        ]
+    df_games = merge_team_features_into_games(
+        df_games=df, 
+        df_team_schedule=df_team_sched,
+        team_schedule_cols=team_schedule_cols,
+        date_time_col=date_time_col
+        )
+
+    return df_games
+
+def get_date_time_features(df: pd.DataFrame) -> pd.DataFrame:
     """
     Create date and time-based features from game datetime information.
     
@@ -199,40 +358,48 @@ def create_date_time_features(df: pd.DataFrame) -> pd.DataFrame:
     df['game_day_of_week'] = df['game_date'].dt.dayofweek
     df['game_hour'] = df['game_date_time'].dt.hour
 
-    return df
+    return df  
 
-def team_rolling_avg(
-        df: pd.DataFrame, 
-        team: Literal['home','away'],
-        value_col: str,
-        window: int = 3,
-        date_time_col: str = 'game_date_time'
-        ) -> pd.Series:
-    team_col = f"{team}_team"
-    return (
-        df
-        .sort_values(date_time_col)
-        .groupby(team_col)[value_col]
-        .transform(lambda x: x.shift(1).rolling(window, min_period=1).mean())
-    )
-
-
-
-def create_team_rolling_avg(df: pd.DataFrame) -> pd.DataFrame:
-
-    ## Home/Away Team Splits
-    # Runs scored
-    df['home_score_3day_avg'] = team_rolling_avg(df, team='home', value_col='home_score',window=3)
-    df['away_score_3day_avg'] = team_rolling_avg(df, team='away', value_col='away_score',window=3)
-    df['home_score_7day_avg'] = team_rolling_avg(df, team='home', value_col='home_score',window=7)
-    df['away_score_7day_avg'] = team_rolling_avg(df, team='away', value_col='away_score',window=7)
-
-    # Runs allowed
-    df['home_runs_allowed_3day_avg'] = team_rolling_avg(df, team='home', value_col='away_score')
-    # Run differential
-
-
-
-    return df
-
+def create_game_features(df: pd.DataFrame, date_col: str = 'game_date',date_time_col: str = 'game_date_time') -> pd.DataFrame:
+    """
+    Create comprehensive rest-related features for both home and away teams.
     
+    This function generates multiple rest-based features that can be used for
+    analysis or modeling, including rest days, back-to-back indicators,
+    rolling averages, and relative rest advantages between teams.
+    
+    Parameters
+    ----------
+    df : pd.DataFrame
+        Input DataFrame containing game data. Must include 'home_team', 'away_team',
+        'game_date_time', and 'game_date' columns.
+        
+    Returns
+    -------
+    pd.DataFrame
+        Original DataFrame with the following new columns added:
+        - 'home_rest_days': Days of rest for home team before each game
+        - 'away_rest_days': Days of rest for away team before each game  
+        - 'home_back2back': Binary indicator (1 if home team has ≤1 rest day)
+        - 'away_back2back': Binary indicator (1 if away team has ≤1 rest day)
+        - 'home_rest_7day_avg': 7-game rolling average of home team rest days
+        - 'away_rest_7day_avg': 7-game rolling average of away team rest days
+        - 'rest_difference': Home rest days minus away rest days
+    """
+    # Schedule Features
+    df_games = get_schedule_features(df, date_col=date_col, date_time_col=date_time_col)
+
+    df_games['home_back2back'] = (df_games['home_team_rest_days'] <= 1).astype(int)
+    df_games['away_back2back'] = (df_games['away_team_rest_days'] <= 1).astype(int)
+
+    df_games['rest_difference'] = df_games['home_team_rest_days'] - df_games['away_team_rest_days']
+
+    # Outcome Features
+    df_games = get_outcome_features(df_games, date_col=date_col, date_time_col=date_time_col)
+
+    # Date-Time Features
+    df_games = get_date_time_features(df_games)
+
+    return df_games
+
+

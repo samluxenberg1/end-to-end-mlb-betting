@@ -39,7 +39,7 @@ def load_games_from_db():
         
         
         # Preview the data
-        print(f"There {len(df_games)} for  modeling...")
+        print(f"There are {len(df_games)} games for  modeling...")
         #print(df_games.head())
     except psycopg2.Error as e: 
         logging.error(f"Database error: {e}")
