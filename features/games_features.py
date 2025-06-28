@@ -1,5 +1,6 @@
 from typing import Literal
 import pandas as pd
+from datetime import timedelta
 
 def team_schedule(
     df: pd.DataFrame, 
@@ -58,7 +59,6 @@ def team_rest_days(
         date_col: str = 'game_date'
         ) -> pd.Series:
     """
-    DOES NOT WORK AS INTENDED -- NEED TO COMBINE HOME AND AWAY SCHEDULES FOR EACH TEAM!!
     Calculate the number of rest days between consecutive games for each team.
     
     This function sorts games chronologically and calculates how many days of rest
@@ -73,7 +73,8 @@ def team_rest_days(
         Specifies whether to calculate rest days for home teams or away teams.
         Will look for corresponding '{team}_team' column in the DataFrame.
     date_time_col : str, default 'game_date_time'
-        Column name containing datetime information used for chronological sorting.
+        Column name containing datetime information used for chronological sorting. 
+        Necessary for sorting between double headers for a single team.
     date_col : str, default 'game_date'
         Column name containing date information used to calculate day differences.
         
@@ -83,11 +84,9 @@ def team_rest_days(
         Series with the same index as input DataFrame containing the number of
         rest days for each game. First game for each team will have 0 rest days.
     """
-    #team_col = f"{team}_team"
-    df_team_sched = team_schedule(df)
+    df_team_sched = team_schedule(df, date_time_col=date_time_col, date_col=date_col)
     return (
         df_team_sched
-        #.sort_values(['team',date_time_col])
         .groupby('team')[date_col]
         .diff()
         .dt.days
@@ -95,10 +94,10 @@ def team_rest_days(
         -1
     ).clip(lower=0)
 
-def team_rest_7day_avg(
+def team_games_previous_7days(
         df: pd.DataFrame, 
-        team: Literal['home','away'],
-        date_col: str = 'game_date'
+        date_col: str = 'game_date',
+        date_time_col: str = 'game_date_time'
         ) -> pd.Series:
     """
     Calculate the 7-day rolling average of rest days for each team.
@@ -124,12 +123,14 @@ def team_rest_7day_avg(
         Series with the same index as input DataFrame containing the 7-day
         rolling average of rest days for each team and game.
     """
-    team_col = f"{team}_team"
+    df_team_sched = team_schedule(df, date_time_col=date_time_col, date_col=date_col)
+    df_team_sched['yesterday_date'] = df_team_sched['game_date']-timedelta(days=1)
     return (
-        df
-        .sort_values('game_date')
-        .groupby(team_col)[f'{team}_rest_days']
-        .transform(lambda x: x.rolling(window=7, min_periods=1).mean())
+        df_team_sched
+        .groupby('team')
+        .rolling(window='7D', on='yesterday_date')
+        .count()['game_date']
+        .reset_index(drop=True)
     )
     
 def create_rest_features(df: pd.DataFrame) -> pd.DataFrame:
