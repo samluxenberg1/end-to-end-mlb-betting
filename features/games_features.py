@@ -60,7 +60,7 @@ def team_schedule(
     team_schedule['team_run_diff'] = team_schedule['team_score'] - team_schedule['opp_score']
 
     # Create season for grouping
-    team_schedule['season'] = team_schedule['game_date'].dt.year
+    team_schedule['season'] = team_schedule['game_date'].dt.year.astype('int64')
 
     return team_schedule
 
@@ -95,7 +95,7 @@ def team_rest_days(
     df_team_sched = team_schedule(df, date_time_col=date_time_col, date_col=date_col)
     return (
         df_team_sched
-        .groupby(['team','seaon'])[date_col]
+        .groupby(['team','season'])[date_col]
         .diff()
         .dt.days
         .fillna(value=0)
