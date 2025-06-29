@@ -86,4 +86,5 @@ def test_team_games_previous_7days():
     pd.testing.assert_series_equal(result.reset_index(drop=True), expected.reset_index(drop=True))
 
 if __name__=='__main__':
+    # Command line: pytest tests/test_features.py
     pytest.main([__file__, "-v"])
