@@ -1,4 +1,5 @@
 import pandas as pd
+from utils_features import merge_team_features_into_games
 
 def team_schedule(
     df: pd.DataFrame, 
@@ -140,54 +141,7 @@ def team_games_previous_7days(
         .fillna(value=0)
         .reset_index(drop=True,level=0)
     )
-def merge_team_features_into_games(
-        df_games: pd.DataFrame, 
-        df_team_schedule: pd.DataFrame, 
-        team_schedule_cols: list[str], 
-        date_time_col: str = 'game_date_time'
-        ) -> pd.DataFrame:
-    """
-    Merge team-level features into the games DataFrame for both home and away teams.
 
-    Parameters
-    ----------
-    df_games : pd.DataFrame
-        Original games DataFrame.
-    df_team_schedule : pd.DataFrame
-        Team schedule DataFrame containing team-level features.
-    team_schedule_cols : list[str]
-        List of column names from df_team_schedule to merge into df_games.
-    date_time_col : str, default 'game_date_time'
-        Column name containing datetime infromation used for merging. 
-    
-    Returns
-    -------
-    pd.DataFrame
-        Games DataFrame with team features merged in, where each feature from team_schedule_cols appears twice - once prefixed with 'home_' and once prefixed with 'away_' for respective teams.
-    """
-    # Home Merge
-    df_games = df_games.merge(
-        df_team_schedule[team_schedule_cols + [date_time_col]],
-        how='left',
-        left_on=['home_team', date_time_col],
-        right_on=['team', date_time_col]
-    )
-    df_games.drop('team', axis=1, inplace=True)
-    home_cols_rename = {col: f'home_{col}' for col in team_schedule_cols}
-    df_games.rename(columns=home_cols_rename, inplace=True)
-
-    # Away Merge
-    df_games = df_games.merge(
-        df_team_schedule[team_schedule_cols + [date_time_col]],
-        how='left',
-        left_on=['away_team',date_time_col],
-        right_on=['team',date_time_col]
-    )
-    df_games.drop('team', axis=1, inplace=True)
-    away_cols_rename = {col: f'away_{col}' for col in team_schedule_cols}
-    df_games.rename(columns=away_cols_rename, inplace=True)
-
-    return df_games
 
 def get_schedule_features(
         df: pd.DataFrame, 
