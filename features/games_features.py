@@ -62,6 +62,9 @@ def team_schedule(
     # Create season for grouping
     team_schedule['season'] = team_schedule['game_date'].dt.year.astype('int64')
 
+    # Create flag for first game of season
+    team_schedule['team_season_opener_flag'] = (team_schedule.groupby(['team','season']).cumcount()==0).astype(int)
+
     return team_schedule
 
 def team_rest_days(
@@ -224,7 +227,7 @@ def get_schedule_features(
     df_team_sched['team_games_prev_7days'] = team_games_previous_7days(df)
 
     # Merge
-    team_schedule_cols = ['team','team_rest_days','team_games_prev_7days'] # no date_time_col here -- add separately
+    team_schedule_cols = ['team','team_rest_days','team_games_prev_7days', 'team_season_opener_flag'] # no date_time_col here -- add separately
     df_games = merge_team_features_into_games(
         df_games=df, 
         df_team_schedule=df_team_sched,
@@ -638,8 +641,14 @@ def create_game_features(df: pd.DataFrame, date_col: str = 'game_date',date_time
     # Schedule Features
     df_games = get_schedule_features(df, date_col=date_col, date_time_col=date_time_col)
 
-    df_games['home_back2back'] = (df_games['home_team_rest_days'] <= 1).astype(int)
-    df_games['away_back2back'] = (df_games['away_team_rest_days'] <= 1).astype(int)
+    df_games['home_back2back'] = (
+        (df_games['home_team_rest_days'] == 0) &
+        (df_games['home_team_season_opener_flag']==0)
+    ).astype(int)
+    df_games['away_back2back'] = (
+        (df_games['away_team_rest_days'] == 0) &
+        (df_games['away_team_season_opener_flag']==0)
+    ).astype(int)
 
     df_games['rest_difference'] = df_games['home_team_rest_days'] - df_games['away_team_rest_days']
 
