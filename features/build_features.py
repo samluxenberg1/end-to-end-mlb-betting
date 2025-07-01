@@ -47,7 +47,7 @@ def build_features():
     for col in datetime_cols:
         df_team_stats[col] = pd.to_datetime(df_team_stats[col])
         
-    df_games = create_team_stats_features(df_games=df_games, df_team_stats=df_team_stats, window=[7,14])
+    df_games = create_team_stats_features(df_games=df_games, df_team_stats=df_team_stats, window=[7,14], lags=[1,2,3])
 
     ## Feature engineering on player stats
 
@@ -69,10 +69,14 @@ if __name__=='__main__':
     
     output_csv = 'data/processed/model_data.csv'
     df_model = build_features()
-    d = df_model.head()
+    d = df_model
+    cols = ['game_id','game_date_time','home_team','away_team','home_score','away_score','home_rolling_avg_obp_7days','rolling_avg_obp_7days_diff', 'home_obp_lag1','home_obp_lag2','home_obp_lag3']
     pd.set_option('display.max_columns', None)
-    print(d.head())
-    
+    #print(d.info())
+    #print(d[cols])
+    print("\nNew York Yankees")
+    print(d.query("home_team=='New York Yankees' | away_team=='New York Yankees'")[cols].head())
+    print(d.columns[:30])
     #df_model.to_csv(output_csv, index=False)
     #print(f"Saved {len(df_model)} rows and {len(df_model.columns)} columns to {output_csv}")
 
