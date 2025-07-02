@@ -1,5 +1,5 @@
 import pandas as pd
-from utils_features import merge_team_stats_features_into_games
+from features.utils_features import merge_team_stats_features_into_games
 
 # Assume we already have df (combined team_stats dataframe) sorted by team and game_date_time
 def rolling_avg_team_stat(df: pd.DataFrame, team_stat: str, window: int) -> pd.Series:

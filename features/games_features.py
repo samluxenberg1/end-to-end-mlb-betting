@@ -1,5 +1,5 @@
 import pandas as pd
-from utils_features import merge_team_features_into_games
+from features.utils_features import merge_team_features_into_games
 
 def team_schedule(
     df: pd.DataFrame, 
