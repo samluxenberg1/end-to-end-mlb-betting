@@ -2,6 +2,7 @@ import pandas as pd
 
 from load_games_from_db import load_games_from_db
 from load_team_stats_from_db import load_team_stats_from_db
+from load_player_stats_from_db import load_player_stats_from_db
 from games_features import create_game_features
 from utils_features import merge_games_identifiers_into_team_stats
 from team_stats_features import create_team_stats_features
@@ -21,6 +22,7 @@ def build_features():
     df_team_stats = load_team_stats_from_db()
 
     # Step 3: Load player stats data
+    df_player_stats = load_player_stats_from_db()
 
     # Step 4: Feature engineering
     # Convert to datetime
@@ -55,9 +57,6 @@ def build_features():
     df_games['home_win'] = (df_games['home_score'] > df_games['away_score']).astype(int)
 
     
-    
-    
-    # Date related features
     
 
     # Step 4: Drop any columns not needed for modeling
