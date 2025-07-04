@@ -2,7 +2,9 @@ import pandas as pd
 from features.utils_players import (
     STAR_BATTERS, 
     STAR_PITCHERS,
-    get_star_players
+    get_star_players,
+    count_missing_star_players,
+    get_players_in_game
 )
 # Features
 # Lineup_avg_obp - find players who played in the current game and compute their avg obp PRIOR to the current game
@@ -12,32 +14,20 @@ from features.utils_players import (
 # starting_pitcher_absent - useful for games without starter data
 # bullpen_game_indicator - inferred via no pitcher with IP > 3
 
-def count_missing_star_players(df_player_stats, df_games):
-    # Join on game_id and team
-    df = pd.merge(
-        df_games[['game_id','game_date','home_team','away_team']],
-        df_player_stats[['game_pk','team_id','player_name']],
-        left_on='game_id',
-        right_on='game_pk',
-        how='left'
-    )
-
-    df['game_year'] = pd.to_datetime(df['game_date']).dt.year
-
-    def missing_star_players(row, side='home'):
-        team = row[f"{side}_team"]
-        year = row["game_year"]
-        players = df[
-            (df['game_date'] == row['game_id']) & 
-            (df['team_id'] == row[f"{side}_team_id"])
-        ]['player_name'].dropna().tolist()
-        stars = get_star_players(team, year, player_set='????')
-        missing = [s for s in stars if s not in players]
-        return len(missing)
+# NEED TO COME BACK TO THIS>>>
+def add_missing_star_players_features(df_games: pd.DataFrame, df_player_stats: pd.DataFrame) -> pd.DataFrame:
+    df_games['season'] = pd.to_datetime(df_games['game_date']).dt.year
     
-    df_games["home_star_players_missing"] = df_games.apply(lambda row: mising_star_players(row, side='home'),axis=1)
-    df_games["away_star_players_missing"] = df_games.apply(lambda row: mising_star_players(row, side='away'),axis=1)
+    for side in ['home', 'away']:
+        df_games[f"{side}_star_batters_missing"] = df_games.apply(
+            lambda row: count_missing_star_players(
+                df_player_stats,
+                row['game_id'],
+                row["f{side}_team_id"]
+            ),
+            row[f"{side}_team"],
+            row["season"]
+        )
 
-    return df_games
 
 if __name__=='__main__': 

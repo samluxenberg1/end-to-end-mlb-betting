@@ -1,11 +1,11 @@
 import pandas as pd
 
-from load_games_from_db import load_games_from_db
-from load_team_stats_from_db import load_team_stats_from_db
-from load_player_stats_from_db import load_player_stats_from_db
-from games_features import create_game_features
-from utils_features import merge_games_identifiers_into_team_stats
-from team_stats_features import create_team_stats_features
+from features.load_games_from_db import load_games_from_db
+from features.load_team_stats_from_db import load_team_stats_from_db
+from features.load_player_stats_from_db import load_player_stats_from_db
+from features.games_features import create_game_features
+from features.utils_features import merge_games_identifiers_into_team_stats
+from features.team_stats_features import create_team_stats_features
 """
 Plan: 
 
@@ -22,7 +22,7 @@ def build_features():
     df_team_stats = load_team_stats_from_db()
 
     # Step 3: Load player stats data
-    df_player_stats = load_player_stats_from_db()
+    #df_player_stats = load_player_stats_from_db()
 
     # Step 4: Feature engineering
     # Convert to datetime
@@ -51,7 +51,7 @@ def build_features():
         
     df_games = create_team_stats_features(df_games=df_games, df_team_stats=df_team_stats, window=[7,14], lags=[1,2,3])
 
-    ## Feature engineering on player stats
+    ## TODO: Feature engineering on player stats
 
     # Step 2: Define target
     df_games['home_win'] = (df_games['home_score'] > df_games['away_score']).astype(int)
@@ -60,22 +60,22 @@ def build_features():
     
 
     # Step 4: Drop any columns not needed for modeling
-    #df_model = df.drop(columns=['xxx','yyy'])
+    df_model = df_games.copy()#.drop(columns=['xxx','yyy'])
     
-    return df_games#_model
+    return df_model
 
 if __name__=='__main__':
-    
+    # run python -m features.build_features
     output_csv = 'data/processed/model_data.csv'
     df_model = build_features()
+    df_model.to_csv(output_csv, index=False)
     d = df_model
-    cols = ['game_id','game_date_time','home_team','away_team','home_score','away_score','home_rolling_avg_obp_7days','rolling_avg_obp_7days_diff', 'home_obp_lag1','home_obp_lag2','home_obp_lag3']
+    print(f"df_model dimensions: {d.shape}")
+    
     pd.set_option('display.max_columns', None)
-    #print(d.info())
-    #print(d[cols])
     print("\nNew York Yankees")
-    print(d.query("home_team=='New York Yankees' | away_team=='New York Yankees'")[cols].head())
-    print(d.columns[:30])
+    print(d.query("home_team=='New York Yankees' | away_team=='New York Yankees'").head())
+    
     #df_model.to_csv(output_csv, index=False)
     #print(f"Saved {len(df_model)} rows and {len(df_model.columns)} columns to {output_csv}")
 

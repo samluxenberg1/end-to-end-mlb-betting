@@ -483,14 +483,27 @@ STAR_PITCHERS = {
 def get_star_players(
         team_name: str, 
         year: int, 
-        player_set: Literal["batters", "pitchers"]
+        star_dict: dict
         ) -> list[str]:
     year_str = str(year)
-    if player_set == "batters":
-        STAR_PLAYERS = STAR_BATTERS
-    else: 
-        STAR_PLAYERS = STAR_PITCHERS
-    if year_str not in STAR_BATTERS:
-        return []
-    return STAR_PLAYERS[year_str].get(team_name, [])
+    return star_dict.get(year_str, {}).get(team_name, [])
+
+def count_missing_star_players(
+    player_names: list[str], 
+    team_name: str, 
+    year: int, 
+    star_dict: dict
+    ) -> int:
+    stars = get_star_players(team_name, year, star_dict)
+    return sum(1 for star in stars if star not in player_names)
+    
+def get_players_in_game(df_player_stats: pd.Series, game_id: int, team_id: int) -> list[str]:
+    return (
+        df_player_stats[
+            (df_player_stats['game_pk']==game_id) &
+            (df_player_stats['team_id']==team_id)
+        ]['player_name']
+        .dropna()
+        .tolist()
+    )
 
