@@ -21,7 +21,7 @@ import joblib
 from datetime import datetime
 import warnings
 
-from utils_models import (
+from models.archive.utils_models_v1 import (
     load_model_data, 
     data_split,
     categorical_encoding
@@ -171,8 +171,8 @@ class MLBModelTrainer:
                 y_train, y_test = y.iloc[train_index], y.iloc[test_index]
 
                 # Get the unique dates for current train and test sets
-                train_dates = groups.iloc[train_dates].unique()
-                test_dates = groups.iloc[test_dates].unique()
+                train_dates = groups.iloc[train_index].unique()
+                test_dates = groups.iloc[test_index].unique()
 
                 logger.info(f"Fold {fold_num}")
                 logger.info(f"  Train samples: {len(X_train)} | Test samples: {len(X_test)}")
@@ -265,6 +265,7 @@ class MLBModelTrainer:
         logger.info("Training final calibrated model on all data...")
 
         # Apply categorical encoding
+        logger.info(f"Columns of X: {X.columns}")
         X_encoded, _ = categorical_encoding(
             X_train=X, 
             X_test=pd.DataFrame(), # empty test set
@@ -400,42 +401,87 @@ class MLBModelTrainer:
 if __name__=='__main__':
 
     # Load data
-
+    input_model_data = "data/processed/model_data.csv"
+    df_model = load_model_data(input_model_data)
+    target = 'home_win'
 
     # Data splitting
-
+    df_train_init, df_holdout, _ = data_split(
+        df=df_model,
+        holdout_start_date='2025-05-01',
+        group_col='game_date'
+    )
 
     # Prepare target variables
+    y_train_init = df_train_init[target]
+    y_holdout = df_holdout[target]
 
-
-    # Define groups for GroupTSCV
-
+    # Define groups for GroupTSCV - do i not need groups from data_split() ? --> will groups for holdout be useful?
+    groups = df_train_init['game_date']
 
     # Remove columns
+    cols_to_remove = [
+        "game_id", "game_date", "game_date_time", "home_team_id",
+        "away_team_id", "home_score", "away_score", "state", target
+    ]
 
+    df_train_init = df_train_init.drop(cols_to_remove, axis=1)
+    df_holdout = df_holdout.drop(cols_to_remove, axis=1)
 
     # Configuration
-
+    config = ModelConfig(
+        hyperparams={
+            'min_samples_leaf': 5, 
+            'class_weight': 'balanced',
+            'random_state': 888,
+            'n_jobs': -1
+        },
+        cv_params={
+            'test_size': 30,
+            #'train_size': 360,
+            'n_splits': 3, # for testing purposes
+            'gap_size': 3,
+            'window_type': 'rolling'
+        },
+        categorical_cols=['home_team','away_team','venue','game_type'],
+        encoding_type='one-hot',
+        calibration_method='isotonic'
+    )
 
     # Train model
-
+    trainer = MLBModelTrainer(config)
 
     # Cross-validation
-
+    results = trainer.train_with_cross_validation(df_train_init, y_train_init, groups)
 
     # Train final model
-
+    trainer.train_final_model(df_train_init, y_train_init)
 
     # Plot calibration curve
-
+    trainer.plot_calibration_curve(df_train_init, y_train_init, save_path='calibration_curve.png')
+    trainer.plot_calibration_curve(df_holdout, y_holdout, save_path='calibration_curve_test.png')
 
     # Save model
-
-
+    trainer.save_model('trained_mlb_model.pkl')
     # Evaluate on holdout set
+    holdout_predictions = trainer.predict(df_holdout)
+    holdout_probabilities = trainer.predict_proba(df_holdout)[:, 1]
 
+    holdout_accuracy = accuracy_score(y_holdout, holdout_predictions)
+    holdout_log_loss = log_loss(y_holdout, holdout_probabilities)
+    holdout_brier = brier_score_loss(y_holdout, holdout_probabilities)
+    holdout_auc = roc_auc_score(y_holdout, holdout_probabilities)
 
+    logger.info("\n" + "="*50)
+    logger.info("HOLDOUT SET EVALUTION")
+    logger.info("="*50)
+    logger.info(f"Holdout Accuracy: {holdout_accuracy: .4f}")
+    logger.info(f"Holdout Log Loss: {holdout_log_loss: .4f}")
+    logger.info(f"Holdout Brier Score: {holdout_brier: .4f}")
+    logger.info(f"Holdout AUC: {holdout_auc: .4f}")
     
+
+
 
 
                 
