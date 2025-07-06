@@ -16,11 +16,14 @@ import matplotlib.pyplot as plt
 import seaborn as sns
 from typing import Dict, List, Tuple, Optional, Any
 import logging
-from dataclasses import dataclass
+from dataclasses import dataclass, asdict
 import pickle
 import joblib
 from datetime import datetime
 import warnings
+
+import mlflow
+import mlflow.sklearn
 
 from models.utils_models import (
     load_model_data, 
@@ -269,6 +272,13 @@ class MLBModelTrainer:
                 logger.info(f"  AUC: {auc_score: .4f}")
                 logger.info(f"  Calibration Score (ECE): {calibration_score: .4f}")
 
+                #mlflow.log_metric(f"fold_{fold_num}_accuracy", accuracy)
+                #mlflow.log_metric(f"fold_{fold_num}_log_loss", log_loss_score)
+                #mlflow.log_metric(f"fold_{fold_num}_brier_score", brier_score)
+                #mlflow.log_metric(f"fold_{fold_num}_auc_score", auc_score)
+                #if not np.isnan(calibration_score):
+                #    mlflow.log_metric(f"fold_{fold_num}_calibration_score", calibration_score)
+
             except Exception as e:
                 logger.error(f"Error in fold {fold_num} as e")
                 raise 
@@ -376,37 +386,36 @@ class MLBModelTrainer:
 
         # Creat calibration curve
         fraction_of_positives, mean_predicted_value = calibration_curve(
-            y, y_pred_proba, n_bins=10
+            y, y_pred_proba, n_bins=10, strategy='quantile'
         )
 
         # Plot
-        plt.figure(figsize=(10,6))
+        fig, axes = plt.subplots(1, 2, figsize=(14,6))
 
         # Calibration Curve
-        plt.subplot(1, 2, 1)
-        plt.plot(mean_predicted_value, fraction_of_positives, "s-", label="Calibrated RF")
-        plt.plot([0, 1], [0, 1], "k:", label="Perfectly calibrated")
-        plt.xlabel("Mean Predicted Probability")
-        plt.ylabel("Fraction of Positives")
-        plt.title("Calibration Curve")
-        plt.legend()
-        plt.grid(True)
+        axes[0].plot(mean_predicted_value, fraction_of_positives, "s-", label="Calibrated RF")
+        axes[0].plot([0, 1], [0, 1], "k:", label="Perfectly calibrated")
+        axes[0].set_xlabel("Mean Predicted Probability")
+        axes[0].set_ylabel("Fraction of Positives")
+        axes[0].set_title("Calibration Curve")
+        axes[0].legend()
+        axes[0].grid(True)
         
         # Histogram of probabilities
-        plt.subplot(1, 2, 2)
-        plt.hist(y_pred_proba, bins=20, alpha=0.7, edgecolor='black')
-        plt.xlabel("Predicted Probability")
-        plt.ylabel("Count")
-        plt.title("Distribution of Predicted Probabilities")
-        plt.grid(True)
+        axes[1].hist(y_pred_proba, bins=20, alpha=0.7, edgecolor='black')
+        axes[1].set_xlabel("Predicted Probability")
+        axes[1].set_ylabel("Count")
+        axes[1].set_title("Distribution of Predicted Probabilities")
+        axes[1].grid(True)
         
         plt.tight_layout()
 
         if save_path:
             plt.savefig(save_path, dpi=300, bbox_inches='tight')
             logger.info(f"Calibration of Predicted Probabilities")
+            mlflow.log_artifact(save_path)
         
-        plt.show()
+        plt.close(fig)
 
     def save_model(self, file_path: str) -> None: 
         """Save the trained model and configuration"""
@@ -467,86 +476,124 @@ class MLBModelTrainer:
     
 if __name__=='__main__':
 
-    # Load data
-    input_model_data = "data/processed/model_data.csv"
-    df_model = load_model_data(input_model_data)
-    target = 'home_win'
+    # Start MLflow run
+    mlflow.set_experiment("MLB_Betting_Model_Training")
+    with mlflow.start_run() as run:
+        logger.info(f"MLflow Run ID: {run.info.run_id}")
+        # Load data
+        input_model_data = "data/processed/model_data.csv"
+        df_model = load_model_data(input_model_data)
+        target = 'home_win'
 
-    # Data splitting
-    df_train_init, df_holdout, _ = data_split(
-        df=df_model,
-        holdout_start_date='2025-05-01',
-        group_col='game_date'
-    )
+        # Data splitting
+        df_train_init, df_holdout, _ = data_split(
+            df=df_model,
+            holdout_start_date='2025-05-01',
+            group_col='game_date'
+        )
 
-    # Remove columns
-    cols_to_remove = [
-        "game_id", "game_date", "game_date_time", "home_team_id",
-        "away_team_id", "home_score", "away_score", "state", target
-    ]
+        # Remove columns
+        cols_to_remove = [
+            "game_id", "game_date", "game_date_time", "home_team_id",
+            "away_team_id", "home_score", "away_score", "state", target
+        ]
 
-    # Prepare features (X) and target (y) for training and holdout
-    X_train_init = df_train_init.drop(cols_to_remove, axis=1)
-    y_train_init = df_train_init[target]
+        # Prepare features (X) and target (y) for training and holdout
+        X_train_init = df_train_init.drop(cols_to_remove, axis=1)
+        y_train_init = df_train_init[target]
 
-    X_holdout = df_holdout.drop(cols_to_remove, axis=1)
-    y_holdout = df_holdout[target]
+        X_holdout = df_holdout.drop(cols_to_remove, axis=1)
+        y_holdout = df_holdout[target]
 
-    # Define groups for GroupTSCV - do i not need groups from data_split() ? --> will groups for holdout be useful?
-    groups = df_train_init['game_date']
+        # Define groups for GroupTSCV - do i not need groups from data_split() ? --> will groups for holdout be useful?
+        groups = df_train_init['game_date']
 
+        
+
+        # Configuration
+        config = ModelConfig(
+            hyperparams={
+                'min_samples_leaf': 5, 
+                'class_weight': 'balanced',
+                'random_state': 888,
+                'n_jobs': -1
+            },
+            cv_params={
+                'test_size': 30,
+                'train_size': 360,
+                #'n_splits': 3, # for testing purposes
+                'gap_size': 3,
+                'window_type': 'rolling'
+            },
+            categorical_cols=['home_team','away_team','venue','game_type'],
+            encoding_type='one-hot',
+            calibration_method='isotonic',
+            random_state=888
+        )
+
+        # Log ModelConfig parameters
+        mlflow.log_params(config.hyperparams)
+        mlflow.log_params(config.cv_params)
+        mlflow.log_param("categorical_cols", config.categorical_cols)
+        mlflow.log_param("encoding_type", config.encoding_type)
+        mlflow.log_param("calibration_method", config.calibration_method)
+        mlflow.log_param("random_state", config.random_state)
+        mlflow.log_param("holdout_start_date", '2025-05-01')
+
+        # Train model
+        trainer = MLBModelTrainer(config)
+
+        # Cross-validation
+        results = trainer.train_with_cross_validation(X_train_init, y_train_init, groups)
+
+        mlflow.log_metric("cv_mean_accuracy", results.mean_accuracy)
+        mlflow.log_metric("cv_mean_log_loss", results.mean_log_loss)
+        mlflow.log_metric("cv_mean_brier_score", results.mean_brier_score)
+        mlflow.log_metric("cv_mean_auc", results.mean_auc)
+        mlflow.log_metric("cv_mean_calibration_score", results.mean_calibration_score)
+
+        # Train final model
+        trainer.train_final_model(X_train_init, y_train_init)
+
+        # Plot calibration curve
+        trainer.plot_calibration_curve(X_train_init, y_train_init, save_path='calibration_curve_train.png')
+        trainer.plot_calibration_curve(X_holdout, y_holdout, save_path='calibration_curve_holdout.png')
+
+        # Save model
+        trainer.save_model('trained_mlb_model.pkl')
+
+        # Input example for MLflow
+        sample_input_raw = X_train_init.head(1)
+        sample_input_transformed = trainer._get_transformed_data(sample_input_raw)
+
+        # Log the trained CalibratedClassifierCV model
+        mlflow.sklearn.log_model(
+            sk_model=trainer.calibrated_model,
+            name="mlb_model",
+            registered_model_name="MLB_Calibrated_RF_Model",
+            input_example=sample_input_transformed
+        )
+
+        # Evaluate on holdout set
+        holdout_predictions = trainer.predict(X_holdout)
+        holdout_probabilities = trainer.predict_proba(X_holdout)[:, 1]
+
+        holdout_accuracy = accuracy_score(y_holdout, holdout_predictions)
+        holdout_log_loss = log_loss(y_holdout, holdout_probabilities)
+        holdout_brier = brier_score_loss(y_holdout, holdout_probabilities)
+        holdout_auc = roc_auc_score(y_holdout, holdout_probabilities)
+
+        logger.info("\n" + "="*50)
+        logger.info("HOLDOUT SET EVALUTION")
+        logger.info("="*50)
+        logger.info(f"Holdout Accuracy: {holdout_accuracy: .4f}")
+        logger.info(f"Holdout Log Loss: {holdout_log_loss: .4f}")
+        logger.info(f"Holdout Brier Score: {holdout_brier: .4f}")
+        logger.info(f"Holdout AUC: {holdout_auc: .4f}")
+
+        mlflow.log_metric("holdout_accuracy", holdout_accuracy)
+        mlflow.log_metric("holdout_log_loss", holdout_log_loss)
+        mlflow.log_metric("holdout_brier_score", holdout_brier)
+        mlflow.log_metric("holdout_auc", holdout_auc)
     
-
-    # Configuration
-    config = ModelConfig(
-        hyperparams={
-            'min_samples_leaf': 5, 
-            'class_weight': 'balanced',
-            'random_state': 888,
-            'n_jobs': -1
-        },
-        cv_params={
-            'test_size': 30,
-            #'train_size': 360,
-            'n_splits': 3, # for testing purposes
-            'gap_size': 3,
-            'window_type': 'rolling'
-        },
-        categorical_cols=['home_team','away_team','venue','game_type'],
-        encoding_type='one-hot',
-        calibration_method='isotonic'
-    )
-
-    # Train model
-    trainer = MLBModelTrainer(config)
-
-    # Cross-validation
-    results = trainer.train_with_cross_validation(X_train_init, y_train_init, groups)
-
-    # Train final model
-    trainer.train_final_model(X_train_init, y_train_init)
-
-    # Plot calibration curve
-    trainer.plot_calibration_curve(X_train_init, y_train_init, save_path='calibration_curve_train.png')
-    trainer.plot_calibration_curve(X_holdout, y_holdout, save_path='calibration_curve_holdout.png')
-
-    # Save model
-    trainer.save_model('trained_mlb_model.pkl')
-
-    # Evaluate on holdout set
-    holdout_predictions = trainer.predict(X_holdout)
-    holdout_probabilities = trainer.predict_proba(X_holdout)[:, 1]
-
-    holdout_accuracy = accuracy_score(y_holdout, holdout_predictions)
-    holdout_log_loss = log_loss(y_holdout, holdout_probabilities)
-    holdout_brier = brier_score_loss(y_holdout, holdout_probabilities)
-    holdout_auc = roc_auc_score(y_holdout, holdout_probabilities)
-
-    logger.info("\n" + "="*50)
-    logger.info("HOLDOUT SET EVALUTION")
-    logger.info("="*50)
-    logger.info(f"Holdout Accuracy: {holdout_accuracy: .4f}")
-    logger.info(f"Holdout Log Loss: {holdout_log_loss: .4f}")
-    logger.info(f"Holdout Brier Score: {holdout_brier: .4f}")
-    logger.info(f"Holdout AUC: {holdout_auc: .4f}")
-
+    logger.info("MLflow run finished.")
