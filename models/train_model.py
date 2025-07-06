@@ -1,6 +1,5 @@
 import pandas as pd
 import numpy as np
-from sklearn.ensemble import RandomForestClassifier
 from sklearn.calibration import CalibratedClassifierCV
 from sklearn.metrics import (
     accuracy_score, 
@@ -9,6 +8,7 @@ from sklearn.metrics import (
     roc_auc_score,
     classification_report
 )
+from sklearn.frozen import FrozenEstimator
 from sklearn.calibration import calibration_curve
 from sklearn.preprocessing import OneHotEncoder
 from mlxtend.evaluate.time_series import GroupTimeSeriesSplit
@@ -90,12 +90,12 @@ class MLBModelTrainer:
         self.numerical_feature_names = None # Stores names of numerical features
         self.all_final_feature_names = None # Stores the complete ordered list of all feature names after encoding
 
-    def _get_lgbm_model(self):
-        """Initializes a LightGBM Classifier model with hyperparameters"""
-        lgbm_parameters = self.config.hyperparams.copy()
-        if self.config.encoding_type == "category":
-            lgbm_parameters['categorical_feature'] = self.config.categorical_cols
-        return lgb.LGBMClassifier(**lgbm_parameters)
+    #def _get_lgbm_model(self):
+    #    """Initializes a LightGBM Classifier model with hyperparameters"""
+    #    lgbm_parameters = self.config.hyperparams.copy()
+    #    if self.config.encoding_type == "category":
+    #        lgbm_parameters['categorical_feature'] = self.config.categorical_cols
+    #    return lgb.LGBMClassifier(**lgbm_parameters)
 
     def _validate_data(self, X: pd.DataFrame, y: pd.Series, groups: pd.Series) -> None:
         """Validate input data for training."""
@@ -166,8 +166,8 @@ class MLBModelTrainer:
         gts = GroupTimeSeriesSplit(**self.config.cv_params)
 
         # Initialize base model
-        # base_model = lgb.LGBMClassifier(**self.config.hyperparams)
-        base_model = self._get_lgbm_model()
+        base_model = lgb.LGBMClassifier(**self.config.hyperparams)
+        #base_model = self._get_lgbm_model()
 
         # Storage for results
         fold_results = {
@@ -257,9 +257,8 @@ class MLBModelTrainer:
 
                 # Create calibrated classifier
                 calibrated_model = CalibratedClassifierCV(
-                    base_model, 
-                    method=self.config.calibration_method,
-                    cv='prefit' 
+                    estimator=FrozenEstimator(base_model), 
+                    method=self.config.calibration_method
                 )
                 
                 # Train calibrated model
@@ -362,13 +361,16 @@ class MLBModelTrainer:
         self.feature_names = self.all_final_feature_names
 
         # Create and train final model
-        #base_model = lgb.LGBMClassifier(**self.config.hyperparams)
-        base_model = self._get_lgbm_model()
+        base_model = lgb.LGBMClassifier(**self.config.hyperparams)
+        #base_model = self._get_lgbm_model()
         base_model.fit(X_encoded, y)
+
+        # Store base model to extract feature importance
+        self.model = base_model
+
         self.calibrated_model = CalibratedClassifierCV(
-            base_model,
-            method=self.config.calibration_method,
-            cv='prefit'
+            estimator=FrozenEstimator(base_model),
+            method=self.config.calibration_method
         )
 
         self.calibrated_model.fit(X_encoded, y)
@@ -412,7 +414,7 @@ class MLBModelTrainer:
         fig, axes = plt.subplots(1, 2, figsize=(14,6))
 
         # Calibration Curve
-        axes[0].plot(mean_predicted_value, fraction_of_positives, "s-", label="Calibrated RF")
+        axes[0].plot(mean_predicted_value, fraction_of_positives, "s-", label="Calibrated LGBM")
         axes[0].plot([0, 1], [0, 1], "k:", label="Perfectly calibrated")
         axes[0].set_xlabel("Mean Predicted Probability")
         axes[0].set_ylabel("Fraction of Positives")
@@ -435,6 +437,40 @@ class MLBModelTrainer:
             mlflow.log_artifact(save_path)
         
         plt.close(fig)
+
+    def plot_feature_importance(self, save_path: Optional[str] = None, top_n: int=20) -> None:
+        """Plot feature importance for base LightGBM model"""
+        if not self.is_trained or self.model is None:
+            raise ValueError("Base model not trained. Call train_final_model first.")
+        
+        if not hasattr(self.model, 'feature_importances_'):
+            logger.warning("Base model does not have feature_importances_ attribute. Cannot plot importance.")
+            return 
+        
+        importances = self.model.feature_importances_
+        feature_names = self.feature_names
+
+        if feature_names is None or len(feature_names) != len(importances):
+            logger.warning("Feature names not available or mismatch with importances. Cannot plot importance.")
+            return 
+        
+        feature_importance_df = pd.DataFrame({
+            'feature': feature_names,
+            'importance': importances
+        }).sort_values(by='importance', ascending=False)
+
+        plt.figure(figsize=(10,8))
+        sns.barplot(x='importance',y='feature', data=feature_importance_df.head(top_n))
+        plt.title(f"Top {top_n} Feature Importances")
+        plt.xlabel('Importance')
+        plt.ylabel('Feature')
+        plt.tight_layout()
+
+        if save_path:
+            plt.savefig(save_path, dpi=300, bbox_inches='tight')
+            logger.info(f"Feature importance plot saved to {save_path}")
+            mlflow.log_artifact(save_path)
+        plt.close()
 
     def save_model(self, file_path: str) -> None: 
         """Save the trained model and configuration"""
@@ -519,9 +555,12 @@ if __name__=='__main__':
 
         # Prepare features (X) and target (y) for training and holdout
         X_train_init = df_train_init.drop(cols_to_remove, axis=1)
+        #feature_subset = ['home_team_games_prev_7days', 'home_team_season_opener_flag','home_team_rest_days','away_team']
+        #X_train_init = X_train_init[feature_subset]
         y_train_init = df_train_init[target]
 
         X_holdout = df_holdout.drop(cols_to_remove, axis=1)
+        #X_holdout = X_holdout[feature_subset]
         y_holdout = df_holdout[target]
 
         # Define groups for GroupTSCV - do i not need groups from data_split() ? --> will groups for holdout be useful?
@@ -545,8 +584,7 @@ if __name__=='__main__':
                 'random_state': 888,
                 'n_jobs': -1,
                 'reg_alpha': 0.1,           # L1 regularization
-                'reg_lambda': 0.1,          # L2 regularization
-                'class_weight': 'balanced'  # Handle class imbalance
+                'reg_lambda': 0.1          # L2 regularization
             },
             cv_params={
                 'test_size': 30,
@@ -555,6 +593,7 @@ if __name__=='__main__':
                 'gap_size': 3,
                 'window_type': 'rolling'
             },
+            #categorical_cols=['away_team'], 
             categorical_cols=['home_team','away_team','venue','game_type'],
             encoding_type='category',
             calibration_method='isotonic',
@@ -590,31 +629,34 @@ if __name__=='__main__':
         trainer.plot_calibration_curve(X_train_init, y_train_init, save_path='figures/calibration_curve_train.png')
         trainer.plot_calibration_curve(X_holdout, y_holdout, save_path='calibration_curve_holdout.png')
 
+        # Plot feature importances
+        trainer.plot_feature_importance(save_path='figures/feature_importances.png', top_n = 20)
+
         # Save model
         trainer.save_model('saved_models/trained_mlb_model.pkl')
 
         # Input example for MLflow
-        sample_input_raw = X_train_init.head(1).copy()
-        sample_input_transformed = trainer._get_transformed_data(sample_input_raw)
-        input_schema_cols = []
-        for col in sample_input_transformed.columns:
-            if col in config.categorical_cols:
-                input_schema_cols.append(ColSpec("string", col))
-            elif pd.api.types.is_integer_dtype(sample_input_transformed[col]):
-                input_schema_cols.append(ColSpec("long", col))
-            else:
-                input_schema_cols.append(ColSpec("double", col))
-        input_schema = Schema(input_schema_cols)
-        output_schema = Schema([ColSpec("double", "prediction_probability")])
-        signature = ModelSignature(inputs=input_schema, outputs=output_schema)
+        # sample_input_raw = X_train_init.head(1).copy()
+        # sample_input_transformed = trainer._get_transformed_data(sample_input_raw)
+        # input_schema_cols = []
+        # for col in sample_input_transformed.columns:
+        #     if col in config.categorical_cols:
+        #         input_schema_cols.append(ColSpec("string", col))
+        #     elif pd.api.types.is_integer_dtype(sample_input_transformed[col]):
+        #         input_schema_cols.append(ColSpec("long", col))
+        #     else:
+        #         input_schema_cols.append(ColSpec("double", col))
+        # input_schema = Schema(input_schema_cols)
+        # output_schema = Schema([ColSpec("double", "prediction_probability")])
+        # signature = ModelSignature(inputs=input_schema, outputs=output_schema)
 
         # Log the trained CalibratedClassifierCV model
         mlflow.sklearn.log_model(
             sk_model=trainer.calibrated_model,
-            name="mlb_model_lightgbm",
+            name="mlb_model_lightgbm_4_features",
             registered_model_name="MLB_Calibrated_LGBM_Model",
-            input_example=sample_input_transformed,
-            signature=signature
+            #input_example=sample_input_transformed,
+            #signature=signature
         )
 
         # Evaluate on holdout set
