@@ -24,6 +24,11 @@ import warnings
 
 import mlflow
 import mlflow.sklearn
+from mlflow.models.signature import infer_signature
+from mlflow.models import ModelSignature
+from mlflow.types.schema import ColSpec, Schema
+
+import lightgbm as lgb
 
 from models.utils_models import (
     load_model_data, 
@@ -38,6 +43,7 @@ logger = logging.getLogger(__name__)
 @dataclass
 class ModelConfig:
     """Configuration class for model training parameters"""
+    model_type: str
     hyperparams: Dict[str, Any]
     cv_params: Dict[str, Any]
     categorical_cols: List[str]
@@ -83,6 +89,13 @@ class MLBModelTrainer:
         self.category_maps = None # Stores dictionary of {col: [categories]} for 'category' dtype
         self.numerical_feature_names = None # Stores names of numerical features
         self.all_final_feature_names = None # Stores the complete ordered list of all feature names after encoding
+
+    def _get_lgbm_model(self):
+        """Initializes a LightGBM Classifier model with hyperparameters"""
+        lgbm_parameters = self.config.hyperparams.copy()
+        if self.config.encoding_type == "category":
+            lgbm_parameters['categorical_feature'] = self.config.categorical_cols
+        return lgb.LGBMClassifier(**lgbm_parameters)
 
     def _validate_data(self, X: pd.DataFrame, y: pd.Series, groups: pd.Series) -> None:
         """Validate input data for training."""
@@ -153,7 +166,8 @@ class MLBModelTrainer:
         gts = GroupTimeSeriesSplit(**self.config.cv_params)
 
         # Initialize base model
-        base_model = RandomForestClassifier(**self.config.hyperparams)
+        # base_model = lgb.LGBMClassifier(**self.config.hyperparams)
+        base_model = self._get_lgbm_model()
 
         # Storage for results
         fold_results = {
@@ -238,11 +252,14 @@ class MLBModelTrainer:
                     self.all_final_feature_names = fold_all_final_cols
                     self.feature_names = fold_all_final_cols
                 
+                # Fit LightGBM
+                base_model.fit(X_train_encoded_fold, y_train_fold)
+
                 # Create calibrated classifier
                 calibrated_model = CalibratedClassifierCV(
                     base_model, 
                     method=self.config.calibration_method,
-                    cv=3 # internal CV for calibration
+                    cv='prefit' 
                 )
                 
                 # Train calibrated model
@@ -345,11 +362,13 @@ class MLBModelTrainer:
         self.feature_names = self.all_final_feature_names
 
         # Create and train final model
-        base_model = RandomForestClassifier(**self.config.hyperparams)
+        #base_model = lgb.LGBMClassifier(**self.config.hyperparams)
+        base_model = self._get_lgbm_model()
+        base_model.fit(X_encoded, y)
         self.calibrated_model = CalibratedClassifierCV(
             base_model,
             method=self.config.calibration_method,
-            cv=3
+            cv='prefit'
         )
 
         self.calibrated_model.fit(X_encoded, y)
@@ -512,26 +531,38 @@ if __name__=='__main__':
 
         # Configuration
         config = ModelConfig(
+            model_type="lightgbm",
             hyperparams={
-                'min_samples_leaf': 5, 
-                'class_weight': 'balanced',
+                'objective': 'binary',
+                'metric': 'logloss',
+                'n_estimators': 500,        # Increased estimators for LGBM
+                'learning_rate': 0.05,      # Learning rate for boosting
+                'num_leaves': 31,           # Controls complexity of trees
+                'max_depth': -1,            # No limit on depth, often works well with num_leaves
+                'min_child_samples': 20,    # Minimum data in a leaf
+                'subsample': 0.8,           # Fraction of samples to be randomly sampled
+                'colsample_bytree': 0.8,    # Fraction of features to be randomly sampled per tree
                 'random_state': 888,
-                'n_jobs': -1
+                'n_jobs': -1,
+                'reg_alpha': 0.1,           # L1 regularization
+                'reg_lambda': 0.1,          # L2 regularization
+                'class_weight': 'balanced'  # Handle class imbalance
             },
             cv_params={
                 'test_size': 30,
-                'train_size': 360,
-                #'n_splits': 3, # for testing purposes
+                #'train_size': 360,
+                'n_splits': 3, # for testing purposes
                 'gap_size': 3,
                 'window_type': 'rolling'
             },
             categorical_cols=['home_team','away_team','venue','game_type'],
-            encoding_type='one-hot',
+            encoding_type='category',
             calibration_method='isotonic',
             random_state=888
         )
 
         # Log ModelConfig parameters
+        mlflow.log_param("model_type", config.model_type)
         mlflow.log_params(config.hyperparams)
         mlflow.log_params(config.cv_params)
         mlflow.log_param("categorical_cols", config.categorical_cols)
@@ -556,22 +587,34 @@ if __name__=='__main__':
         trainer.train_final_model(X_train_init, y_train_init)
 
         # Plot calibration curve
-        trainer.plot_calibration_curve(X_train_init, y_train_init, save_path='calibration_curve_train.png')
+        trainer.plot_calibration_curve(X_train_init, y_train_init, save_path='figures/calibration_curve_train.png')
         trainer.plot_calibration_curve(X_holdout, y_holdout, save_path='calibration_curve_holdout.png')
 
         # Save model
-        trainer.save_model('trained_mlb_model.pkl')
+        trainer.save_model('saved_models/trained_mlb_model.pkl')
 
         # Input example for MLflow
-        sample_input_raw = X_train_init.head(1)
+        sample_input_raw = X_train_init.head(1).copy()
         sample_input_transformed = trainer._get_transformed_data(sample_input_raw)
+        input_schema_cols = []
+        for col in sample_input_transformed.columns:
+            if col in config.categorical_cols:
+                input_schema_cols.append(ColSpec("string", col))
+            elif pd.api.types.is_integer_dtype(sample_input_transformed[col]):
+                input_schema_cols.append(ColSpec("long", col))
+            else:
+                input_schema_cols.append(ColSpec("double", col))
+        input_schema = Schema(input_schema_cols)
+        output_schema = Schema([ColSpec("double", "prediction_probability")])
+        signature = ModelSignature(inputs=input_schema, outputs=output_schema)
 
         # Log the trained CalibratedClassifierCV model
         mlflow.sklearn.log_model(
             sk_model=trainer.calibrated_model,
-            name="mlb_model",
-            registered_model_name="MLB_Calibrated_RF_Model",
-            input_example=sample_input_transformed
+            name="mlb_model_lightgbm",
+            registered_model_name="MLB_Calibrated_LGBM_Model",
+            input_example=sample_input_transformed,
+            signature=signature
         )
 
         # Evaluate on holdout set
