@@ -415,11 +415,11 @@ class MLBModelTrainer:
         fig, axes = plt.subplots(1, 2, figsize=(14,6))
 
         # Calibration Curve
-        axes[0].plot(mean_predicted_value, fraction_of_positives, "s-", label="Calibrated LGBM")
+        axes[0].plot(mean_predicted_value, fraction_of_positives, "s-", label="Calibrated CatBoost")
         axes[0].plot([0, 1], [0, 1], "k:", label="Perfectly calibrated")
         axes[0].set_xlabel("Mean Predicted Probability")
         axes[0].set_ylabel("Fraction of Positives")
-        axes[0].set_title("Calibration Curve")
+        axes[0].set_title("Calibration Curve | strategy = 'quantile'")
         axes[0].legend()
         axes[0].grid(True)
         
@@ -440,7 +440,7 @@ class MLBModelTrainer:
         plt.close(fig)
 
     def plot_feature_importance(self, save_path: Optional[str] = None, top_n: int=20) -> None:
-        """Plot feature importance for base LightGBM model"""
+        """Plot feature importance for base CatBoost model"""
         if not self.is_trained or self.model is None:
             raise ValueError("Base model not trained. Call train_final_model first.")
         

@@ -1,0 +1,61 @@
+# score_games.py
+import argparse
+import logging
+import pandas as pd
+import joblib
+from datetime import datetime
+
+# --- Your internal utilities ---
+from features.games_features import generate_game_features
+from features.team_stats_features import generate_team_stats_features
+# from features.player_stats_features import generate_player_stats_features  # optional / later
+from db.load_games_from_db import load_games_for_date
+from db.load_team_stats_from_db import load_team_stats_for_date
+
+
+def load_model(model_path: str):
+    return joblib.load(model_path)
+
+
+def prepare_features(game_date: str) -> pd.DataFrame:
+    logging.info(f"Preparing features for {game_date}")
+
+    # Load base data
+    games_df = load_games_for_date(game_date)
+    team_stats_df = load_team_stats_from_db(game_date)
+
+    # Merge and generate features
+    df = generate_game_features(games_df)
+    df = generate_team_stats_features(df, team_stats_df)
+
+    # Optional: include player features if desired
+    # df = generate_player_stats_features(df, player_stats_df)
+
+    return df
+
+
+def score_games(model, feature_df: pd.DataFrame):
+    X = feature_df.drop(columns=["home_win"], errors="ignore")
+    preds = model.predict_proba(X)[:, 1]  # probability home team wins
+    output = feature_df[["game_id", "game_date", "home_team", "away_team"]].copy()
+    output["home_win_prob"] = preds
+    return output
+
+
+def main(game_date: str, model_path: str, output_path: str):
+    features = prepare_features(game_date)
+    model = load_model(model_path)
+    predictions = score_games(model, features)
+    predictions.to_csv(output_path, index=False)
+    logging.info(f"Predictions saved to {output_path}")
+
+
+if __name__ == "__main__":
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--date", type=str, required=True, help="Date to score in YYYY-MM-DD format")
+    parser.add_argument("--model-path", type=str, default="models/baseline_model.pkl")
+    parser.add_argument("--output-path", type=str, default="predictions/todays_predictions.csv")
+    args = parser.parse_args()
+
+    logging.basicConfig(level=logging.INFO)
+    main(args.date, args.model_path, args.output_path)
