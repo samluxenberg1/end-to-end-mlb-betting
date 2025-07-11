@@ -3,7 +3,6 @@ import pandas as pd
 import psycopg2
 import warnings
 import logging
-from datetime import date
 
 from dotenv import load_dotenv
 load_dotenv()
@@ -30,13 +29,12 @@ def load_games_from_db():
                 SELECT * FROM games
                 WHERE 
                     game_type = 'R'
-                    AND state IN ('Final', 'Completed Early', 'Scheduled')
+                    AND state = 'Scheduled'
                     AND home_team IS NOT NULL
                     AND away_team IS NOT NULL;
                 """
                 df_games = pd.read_sql_query(query, conn)
-                df_games = df_games[(df_games['game_type']!='Scheduled') | (df_games['game_date']>=date.today())]
-                
+
         logging.info(f"Successully loaded {len(df_games)} games from database")
         
         
@@ -53,7 +51,12 @@ def load_games_from_db():
     return df_games
 
 
+if __name__=='__main__':
+    from datetime import date
+    df = load_games_from_db()
+    print(df[df['game_date']>=date.today()])
 
+    
     
 
 

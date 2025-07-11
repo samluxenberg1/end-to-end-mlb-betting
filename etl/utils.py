@@ -1,6 +1,6 @@
 import requests
 import time
-from datetime import date
+from datetime import date, timedelta
 import psycopg2
 from pydantic import BaseModel, validator
 from typing import Optional
@@ -363,7 +363,7 @@ def fetch_player_stats(game_pk: str, max_retries: int) -> list[PlayerStats]:
 
 
 if __name__ == "__main__":
-    print(fetch_games(date.today().isoformat(), max_retries=3)[:2])  # quick sanity check
+    print(fetch_games((date.today()+timedelta(days=1)).isoformat(), max_retries=3)[:2])  # quick sanity check
     #print("\n\n")
     #print(fetch_team_stats(634627, max_retries=3))
     #print("\n")

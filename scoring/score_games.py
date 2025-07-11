@@ -2,6 +2,7 @@ import argparse
 import logging
 import pandas as pd
 import joblib
+import datetime
 from datetime import datetime, date, timedelta
 
 import os
@@ -10,11 +11,12 @@ import psycopg2
 from features.games_features import create_game_features
 from features.team_stats_features import create_team_stats_features
 #from features.player_stats_features import create_player_stats_features
-from features.load_games_from_db import load_games_from_db # need to add load_games_for_date(game_date)
-from features.load_team_stats_from_db import load_team_stats_from_db
+from features import load_games_from_db # need to add load_games_for_date(game_date)
+from features import load_team_stats_from_db
+from features import build_features
 
 from etl.utils import fetch_games
-
+from scoring import load_games_from_db_scoring
 """
 For scoring, there are 5 steps to accomplish. 
 
@@ -71,30 +73,45 @@ def main(scoring_date: str):
     logging.basicConfig(level=logging.INFO)
     logging.info(f"Scoring games for {scoring_date}")
 
-    # Step 1: Fetch games
-    games = fetch_games(date_str=scoring_date, max_retries=3)
-    games_df = pd.DataFrame(games)
-    if games_df.empty:
-        logging.warning("No games found.")
-        return 
+    # Step 1: Fetch games that are scheduled for today and tomorrow
+    scoring_games_df = load_games_from_db_scoring.load_games_from_db()
+    scoring_games_df = scoring_games_df[scoring_games_df['game_date']>=date.today()].sort_values('game_date_time')
+
+    # Step 2: Fetch all historical games
+    #historical_games_df = load_games_from_db.load_games_from_db()
+
+    # Step 2: Fetch all historical team stats
+    #team_stats_df = load_team_stats_from_db.load_team_stats_from_db()
+
+    # Step 2: Fetch all historical player stats
+    #player_stats_df = load_player_stats_from_db()
+
+    # Step 3: Only keep team stats from games in games data
+
     
     # Step 2: Build features
-    features_df = build_features_for_date(scoring_date, games_df)
+    features_df = build_features.build_features()
 
     # Step 3: Load model
-    model = load_model("models/final_model.pkl")
+   # model = load_model("models/final_model.pkl")
 
     # Step 4: Make predictions
-    features_df['predicted_prob_home_win'] = predict_proba(model, features_df)
+    #features_df['predicted_prob_home_win'] = predict_proba(model, features_df)
 
     # Step 5: Log to DB
-    insert_predictions_to_db(features_df)
-    logging.info("Predictions saved to database.")
+    #insert_predictions_to_db(features_df)
+    #logging.info("Predictions saved to database.")
+
+    return features_df
 
 
 
 if __name__=='__main__':
     parser = argparse.ArgumentParser()
-    parser.add_argument("--date", type=str, default=datetime.date.toda().isoformat())
+    parser.add_argument("--date", type=str, default=date.today().isoformat())
     args = parser.parse_args()
-    main(args.date)
+    feat_df = main(args.date)
+    pd.set_option('display.max_columns', None)
+    print(feat_df.tail(2))
+    print(feat_df['game_date'].max())
+    print(feat_df['game_date_time'].max())
