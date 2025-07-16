@@ -75,3 +75,32 @@ HAVING COUNT(*) > 1;
 -- Stat range sanity checks
 SELECT * FROM player_stats
 WHERE at_bats < 0 OR hits < 0 OR home_runs < 0;
+
+-- Check team totals = sum of player stats -- 22 data points where player total hits != team total hits
+SELECT ps.game_pk, ps.team_id, SUM(ps.hits) as player_hits, ts.hits_batting as team_hits from player_stats ps
+LEFT JOIN team_stats ts
+ON ps.game_pk = ts.game_pk AND ps.team_id = ts.team_id
+GROUP BY ps.game_pk, ps.team_id, ts.hits_batting
+HAVING SUM(ps.hits) != ts.hits_batting;
+
+-- Checks games where sum of player hits != team hits
+-- Out of 22 games, 18 are exhibition games, which I plan to exclude from modeling anyway.
+-- What are the other 4 regular season games? game ids: 633206, 777574, 777543, 777547
+SELECT * FROM games
+WHERE game_id in (
+    SELECT ps.game_pk fro player_stats ps
+    LEFT JOIN team_stats ts
+    ON ps.game_pk = ts.game_pk AND ps.team_id = ts.game_id
+    GROUP BY ps.game_pk, ps.team_id, ts.hits_batting
+    HAVING SUM(ps.hits) != ts.hits_batting
+);
+
+-- Investigate those 4 games
+SELECT * FROM games
+WHERE game_id in (
+    SELECT ps.game_pk FROM player_stats ps
+    LEFT JOIN team_stats ts
+    ON ps.game_pk = ts.game_pk AND ps.team_id = ts.team_id
+    GROUP BY ps.game_pk, ps.team_id, ts.hits_batting
+    HAVING SUM(ps.hits) != ts.hits_batting
+) AND games.game_type != "E";
