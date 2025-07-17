@@ -1,8 +1,8 @@
 import logging
 from datetime import date, datetime, timedelta
 
-from utils import fetch_latest_game_date, fetch_games, fetch_team_stats, fetch_player_stats
-from load_to_db import load_games_to_db, load_team_stats_to_db, load_player_stats_to_db
+from src.etl.utils import fetch_latest_game_date, fetch_games, fetch_team_stats, fetch_player_stats
+from src.etl.load_to_db import load_games_to_db, load_team_stats_to_db, load_player_stats_to_db
 
 DB_CONFIG = {
     "dbname": "mlb_db",
@@ -34,13 +34,13 @@ def update_all_data(db_config: dict, max_retries: int):
     today = date.today()
     latest_date = fetch_latest_game_date(db_config)
 
-    logging.info(f"Fetching new data from {latest_date+timedelta(days=1)} to {today}")
+    logging.info(f"Fetching new data from {latest_date-timedelta(days=7)} to {today}")
 
     all_games, all_team_stats, all_player_stats = [], [], []
 
     # For each date range from latest date in games table until today,
     # fetch all games and team/player stats from each of those games.
-    for single_date in daterange(latest_date+timedelta(days=1), today):
+    for single_date in daterange(latest_date-timedelta(days=7), today):
         single_date_str = single_date.strftime("%Y-%m-%d")
         try:
             games = fetch_games(date_str=single_date_str, max_retries=max_retries)

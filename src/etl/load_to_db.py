@@ -25,10 +25,27 @@ def clean_row(row):
     """
     return {key: (None if val == '' else val) for key, val in row.items()}
 
-def load_games_to_db(db_config: dict, data: list = None, from_memory: bool = False, csv_path: str = None) -> None:
+def load_games_to_db(
+        db_config: dict, 
+        data: list = None, 
+        from_memory: bool = False, 
+        csv_path: str = None
+        ) -> None:
     """
     Bulk-insert a csv file of games (from fetch_games) into the `games` table.
-    Uses ON CONFLICT DO NOTHING so reruns are idempotent. 
+    Uses ON CONFLICT DO UPDATE so that if a game with 'Scheduled' state (no result)
+    is encountered, it will be updated with a new version containing game results.
+
+    Parameters
+    ----------
+    db_config: dict
+        Database connection configuration
+    data: list = None
+        List of game dictionaries (used when from_memory=True)
+    from_memory: bool = False
+        If True, load from data parameter, else from CSV file
+    csv_path: str = None
+        Path to CSV file (required when from_memory=False)
     """
     # Connect to Postgres 
     with psycopg2.connect(**db_config) as conn:
@@ -50,7 +67,7 @@ def load_games_to_db(db_config: dict, data: list = None, from_memory: bool = Fal
                 rows = [clean_row(row) for row in data]
 
             if not rows:
-                logging.warning("No rows found in CSV. Exiting.")
+                logging.warning("No rows found in data. Exiting.")
                 return 
             
             columns = [
@@ -74,13 +91,21 @@ def load_games_to_db(db_config: dict, data: list = None, from_memory: bool = Fal
 
             values = [[row[col] for col in columns] for row in rows]
 
+            # Construct the ON CONFLICT DO UPDATE part
+            update_columns = ["game_date","game_date_time", "home_score", "away_score", "state", "venue"]
+            update_set_clauses = [f"{col} = EXCLUDED.{col}" for col in update_columns]
+            update_clause = ", ".join(update_set_clauses)
+
             sql = f"""
                 INSERT INTO games ({', '.join(columns)})
                 VALUES %s
-                ON CONFLICT (game_id) DO NOTHING;
+                ON CONFLICT (game_id) DO UPDATE SET
+                    {update_clause}
+                WHERE games.state = 'Scheduled';
             """
 
             logging.info(f"Inserting {len(values)} rows into the database...")
+            
             execute_values(cur, sql, values)
             conn.commit()
             logging.info("Insert complete.")
