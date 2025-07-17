@@ -67,6 +67,7 @@ end-to-end-mlb-betting/
 
 ## 🔁 ETL Pipeline
 - __Break into steps: extract, transform, load__
+    - Note that to get updated data, run `python -m src.etl.update_all_data`
 - __Briefly describe each stage, CLI args, file outputs.__
 
 ## 🧱 Database Schema

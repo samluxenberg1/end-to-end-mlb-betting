@@ -1,0 +1,31 @@
+# MLB Modeling Configuration File
+
+target: "home_win"
+
+cols_to_remove: 
+  - "game_id"
+  - "game_date"
+  - "game_date_time"
+  - "home_team_id"
+  - "away_team_id"
+  - "home_score"
+  - "away_score"
+  - "state"
+  - "home_win"
+
+holdout_start_date: "2025-05-01"
+
+categorical_cols: 
+  - "home_team"
+  - "away_team"
+  - "venue"
+  - "game_type"
+
+
+# Cross-Validation Parameters
+test_size: 30
+train_size: 360
+n_splits: 3
+gap_size: 3
+window_type: "rolling"
+
