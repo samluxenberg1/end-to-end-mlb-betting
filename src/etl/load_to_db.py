@@ -181,10 +181,17 @@ def load_team_stats_to_db(db_config: dict, data: list = None, from_memory: bool 
             
             values = [[row[col] for col in columns] for row in rows]
 
+            # Construct the ON CONFLICT DO UPDATE part
+            update_columns = list(set(columns)-set(['game_pk','team_side','team_id']))
+            update_set_clauses = [f"{col} = EXCLUDED.{col}" for col in update_columns]
+            update_clause = ", ".join(update_set_clauses)
+
             sql = f"""
                 INSERT INTO team_stats ({', '.join(columns)})
                 VALUES %s
-                ON CONFLICT (game_pk, team_side) DO NOTHING;
+                ON CONFLICT (game_pk, team_side) DO UPDATE SET
+                    {update_clause}
+                WHERE team_stats.pitchesthrown = 0;
             """
 
             logging.info(f"Inserting {len(values)} rows into the database...")

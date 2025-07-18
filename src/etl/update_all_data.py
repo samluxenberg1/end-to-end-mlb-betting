@@ -43,6 +43,7 @@ def update_all_data(db_config: dict, max_retries: int):
     for single_date in daterange(latest_date-timedelta(days=7), today):
         single_date_str = single_date.strftime("%Y-%m-%d")
         try:
+            logging.info(f"Fetching game data for {single_date_str}...")
             games = fetch_games(date_str=single_date_str, max_retries=max_retries)
             all_games.extend(games)
 
@@ -76,6 +77,8 @@ def update_all_data(db_config: dict, max_retries: int):
 
 if __name__=="__main__":
     update_all_data(DB_CONFIG, 3)
+
+    # test game_id/gamepk = 777146 (july 11, 2025)
 
 
 
