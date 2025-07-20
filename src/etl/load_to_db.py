@@ -191,10 +191,21 @@ def load_team_stats_to_db(db_config: dict, data: list = None, from_memory: bool 
                 VALUES %s
                 ON CONFLICT (game_pk, team_side) DO UPDATE SET
                     {update_clause}
-                WHERE team_stats.pitchesthrown = 0;
+                WHERE EXCLUDED.pitchesthrown > 0 OR EXCLUDED.runs_batting > 0;
             """
 
             logging.info(f"Inserting {len(values)} rows into the database...")
+            seen = set()
+            unique_values = []
+            for row_values in values:
+                game_pk, team_side = row_values[0], row_values[1]
+                key = (game_pk, team_side)
+                if key not in seen:
+                    seen.add(key)
+                    unique_values.append(row_values)
+                else: 
+                    logging.warning(f"Duplicate found for game_pk={game_pk}, team_side={team_side}. Skipping.")
+            values = unique_values
             execute_values(cur, sql, values)
             conn.commit()
             logging.info("Insert complete.")
