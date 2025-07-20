@@ -19,7 +19,7 @@ def fetch_raw_odds_for_date(date_str: str):
         "regions": "us",
         "markets": "h2h",
         "oddsFormat": "american",
-        "date": f"{date_str}T16:00:00Z" # 12 pm eastern (4pm UTC)
+        "date": f"{date_str}T13:00:00Z" # 9 am eastern (1pm UTC)
     }
     response = requests.get(HIST_URL, params=params, timeout=10)
     response.raise_for_status()

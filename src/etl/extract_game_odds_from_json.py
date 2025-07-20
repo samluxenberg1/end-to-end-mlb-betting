@@ -9,6 +9,7 @@ def parse_odds_json(json_path: str) -> list[dict]:
     with open(json_path, "r") as f:
         json_data = json.load(f)
     
+    timestamp = json_data.get("timestamp")
     games = json_data.get("data", [])
     parsed_games = []
 
@@ -49,6 +50,7 @@ def parse_odds_json(json_path: str) -> list[dict]:
             outcomes = {o.get("name"): o.get("price") for o in selected_market.get("outcomes", [])}
             
             parsed_games.append({
+                "timestamp": timestamp,
                 "game_date": game_date,
                 "home_team": home_team,
                 "away_team": away_team,
