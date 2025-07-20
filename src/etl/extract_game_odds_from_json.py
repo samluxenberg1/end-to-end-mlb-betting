@@ -72,7 +72,7 @@ if __name__ == '__main__':
     
 
     input_dir = "data/odds_api_raw"
-    output_csv = "data/processed_game_dds"
+    output_csv = "data/processed_game_odds.csv"
 
     all_parsed_game_odds = []
 

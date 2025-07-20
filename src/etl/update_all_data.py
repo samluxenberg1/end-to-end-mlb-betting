@@ -34,13 +34,13 @@ def update_all_data(db_config: dict, max_retries: int):
     today = date.today()
     latest_date = fetch_latest_game_date(db_config)
 
-    logging.info(f"Fetching new data from {latest_date-timedelta(days=10)} to {today}")
+    logging.info(f"Fetching new data from {latest_date-timedelta(days=1)} to {today+timedelta(days=1)}")
 
     all_games, all_team_stats, all_player_stats = [], [], []
 
     # For each date range from latest date in games table until today,
     # fetch all games and team/player stats from each of those games.
-    for single_date in daterange(latest_date-timedelta(days=10), today):
+    for single_date in daterange(latest_date-timedelta(days=1), today+timedelta(days=1)):
         single_date_str = single_date.strftime("%Y-%m-%d")
         try:
             logging.info(f"Fetching game data for {single_date_str}...")

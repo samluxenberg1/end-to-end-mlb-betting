@@ -77,8 +77,8 @@ def main(scoring_date: str):
     logging.info(f"Scoring games for {scoring_date}")
 
     # Step 1: Fetch games that are scheduled for today and tomorrow
-    scoring_games_df = load_games_from_db_scoring.load_games_from_db()
-    scoring_games_df = scoring_games_df[scoring_games_df['game_date']>=date.today()].sort_values('game_date_time')
+    #scoring_games_df = load_games_from_db_scoring.load_games_from_db()
+    #scoring_games_df = scoring_games_df[scoring_games_df['game_date']>=date.today()].sort_values('game_date_time')
 
     # Step 2: Fetch all historical games
     #historical_games_df = load_games_from_db.load_games_from_db()

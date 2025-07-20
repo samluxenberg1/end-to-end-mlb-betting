@@ -4,7 +4,7 @@ import time
 import logging
 import requests
 from datetime import datetime
-from gen_utils_etl import daterange
+from src.etl.gen_utils_etl import daterange
 
 from dotenv import load_dotenv
 load_dotenv()
