@@ -1,4 +1,5 @@
 import pandas as pd
+import numpy as np
 import matplotlib.pyplot as plt
 import seaborn as sns
 
@@ -12,8 +13,6 @@ import logging
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(message)s")
 
-odds_path = "../../data/processed_game_odds.csv"
-scored_data_path = "output.csv"
 
 def keep_preferred_bookmaker(group, preferred_bookmakers):
 
@@ -42,10 +41,13 @@ def join_odds_to_scored_data(df_scored: pd.DataFrame, df_odds: pd.DataFrame) -> 
     logging.info(f"Earliest Date in Odds Data: {df_odds['game_date'].min()}, Latest Date in Odds Data: {df_odds['game_date'].max()}")
 
     # Convert to datetime
-    df_scored['game_date'] = pd.to_datetime(df_scored['game_date'])
-    df_odds['game_date'] = pd.to_datetime(df_odds['game_date'])
+    df_scored['game_date_time'] = pd.to_datetime(df_scored['game_date_time'], utc=True)
+    df_scored['game_date'] = pd.to_datetime(df_scored['game_date'], utc=True)
+    df_odds['game_date'] = pd.to_datetime(df_odds['game_date'], utc=True)
     df_odds['commence_time'] = pd.to_datetime(df_odds['commence_time'], utc=True)
     df_odds['timestamp'] = pd.to_datetime(df_odds['timestamp'], utc=True)
+
+    df_scored['season'] = df_scored['game_date'].dt.year
 
     # Join odds data to scored data
     odds_cols = ['timestamp','game_date','commence_time','home_team','away_team','bookmaker','home_odds','away_odds']
@@ -109,6 +111,44 @@ def calculate_betting_metrics(df_scored: pd.DataFrame) -> pd.DataFrame:
     df_scored['home_is_valuable'] = (df_scored['home_expected_profit'] > 0).astype('Int64')
     df_scored['away_is_valuable'] = (df_scored['away_expected_profit'] > 0).astype('Int64')
 
+    # Value vs. Result
+    df_scored['home_value_bet_agree'] = (df_scored['home_is_valuable'] == df_scored['home_win']).astype('Int64')
+    df_scored['home_value_bet_win'] = ((df_scored['home_is_valuable']==1) & (df_scored['home_win']==1)).astype('Int64')
+    df_scored['away_value_bet_agree'] = (df_scored['away_is_valuable'] != df_scored['home_win']).astype('Int64')
+    df_scored['away_value_bet_win'] = ((df_scored['away_is_valuable']==1) & (df_scored['home_win']==0)).astype('Int64')
+
+    # Full amount to win and lose
+    df_scored['home_win_full_amount'] = np.where(df_scored['home_odds'] < 0, 100, df_scored['home_odds'])
+    df_scored['home_loss_full_amount'] = np.where(df_scored['home_odds'] < 0, df_scored['home_odds'], -100)
+    df_scored['away_win_full_amount'] = np.where(df_scored['away_odds'] < 0, 100, df_scored['away_odds'])
+    df_scored['away_loss_full_amount'] = np.where(df_scored['away_odds'] < 0, df_scored['away_odds'], -100)
+
+    # Net profit per bet
+    home_profit_conditions = [
+        (df_scored['home_is_valuable']==1) & (df_scored['home_win']==1),
+        (df_scored['home_is_valuable']==1) & (df_scored['home_win']==0),
+        df_scored['home_is_valuable']==0
+        ]
+    home_choices = [
+        df_scored['home_win_full_amount'],
+        df_scored['home_loss_full_amount'],
+        np.nan
+        ]
+    df_scored['home_net_profit'] = np.select(home_profit_conditions, home_choices, default=np.nan)
+
+    away_profit_conditions = [
+        (df_scored['away_is_valuable']==1) & (df_scored['home_win']==0),
+        (df_scored['away_is_valuable']==1) & (df_scored['home_win']==1),
+        df_scored['away_is_valuable']==0
+        ]
+    away_choices = [
+        df_scored['away_win_full_amount'],
+        df_scored['away_loss_full_amount'],
+        np.nan
+        ]
+    df_scored['away_net_profit'] = np.select(away_profit_conditions, away_choices, default=np.nan)
+    
+
     return df_scored
 
 def summarize_evaluation(df_scored: pd.DataFrame): 
@@ -117,7 +157,31 @@ def summarize_evaluation(df_scored: pd.DataFrame):
     num_away_valuable = df_scored['away_is_valuable'].sum()
     num_valuable = num_home_valuable + num_away_valuable
 
-    logging.info(f"Proportion of Valuable Bets Since 2021: {num_valuable/df_scored}")
+    logging.info(f"Number of Valuable Bets Since 2021: {num_valuable} out of {len(df_scored)} games")
+    logging.info(f"Proportion of Valuable Home Bets Since 2021: {num_home_valuable/df_scored['home_is_valuable'].count(): .3f}")
+    logging.info(f"Proportion of Valuable Away Bets Since 2021: {num_away_valuable/df_scored['away_is_valuable'].count(): .3f}")
+
+    num_home_value_bet_agree = df_scored['home_value_bet_agree'].sum()
+    num_away_value_bet_agree = df_scored['away_value_bet_agree'].sum()
+    num_home_value_bet_win = df_scored['home_value_bet_win'].sum()
+    num_away_value_bet_win = df_scored['away_value_bet_win'].sum()
+
+    logging.info(f"Number of Home Value Decision Agreements: {num_home_value_bet_agree}")
+    logging.info(f"Number of Away Value Decision Agreements: {num_away_value_bet_agree}")
+    logging.info(f"Number of Home Value Bet Wins: {num_home_value_bet_win} out of {num_home_valuable} = {num_home_value_bet_win/num_home_valuable : .3f}")
+    logging.info(f"Number of Away Value Bet Wins: {num_away_value_bet_win} out of {num_away_valuable} = {num_away_value_bet_win/num_away_valuable : .3f}")
+
+    total_home_net_profit = df_scored['home_net_profit'].sum()
+    total_away_net_profit = df_scored['away_net_profit'].sum()
+
+    logging.info(f"Total Home Net Profits Since 2021: ${total_home_net_profit}")
+    logging.info(f"Total Away Net Profits Since 2021: ${total_away_net_profit}")
+    logging.info(f"Total Net Profits Since 2021: ${total_home_net_profit+total_away_net_profit}")
+
+
+
+    return 
+    
 
 def run_evaluation(df_scored: pd.DataFrame, df_odds: pd.DataFrame):
 
@@ -126,6 +190,27 @@ def run_evaluation(df_scored: pd.DataFrame, df_odds: pd.DataFrame):
 
     # Step 2 - Betting Metrics
     df_scored = calculate_betting_metrics(df_scored=df_scored)
+
+    # Step 3 - Output
+    summarize_evaluation(df_scored=df_scored)
+
+    return df_scored
+
+
+if __name__=='__main__':
+
+    odds_path = "data/processed_game_odds.csv"
+    scored_data_path = "src/scoring/output.csv"
+
+    df_odds = pd.read_csv(odds_path)
+    df_scored = pd.read_csv(scored_data_path)
+
+    df_out = run_evaluation(df_scored=df_scored, df_odds=df_odds)
+
+    save_path = "src/scoring/evaluation.csv"
+    df_out.to_csv(save_path, index=False)
+
+
 
 
 
