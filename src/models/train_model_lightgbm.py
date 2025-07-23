@@ -28,7 +28,7 @@ from mlflow.models.signature import infer_signature
 from mlflow.models import ModelSignature
 from mlflow.types.schema import ColSpec, Schema
 
-import catboost as cb
+import lightgbm as lgb
 
 from src.models.utils_models import (
     load_model_data, 
@@ -142,8 +142,8 @@ class MLBModelTrainer:
         gts = GroupTimeSeriesSplit(**self.config.cv_params)
 
         # Initialize base model
-        base_model = cb.CatBoostClassifier(**self.config.hyperparams)
-        #base_model = self._get_lgbm_model()
+        #base_model = cb.CatBoostClassifier(**self.config.hyperparams)
+        base_model = lgb.LGBMClassifier(**self.config.hyperparams)
 
         # Storage for results
         fold_results = {
@@ -190,34 +190,34 @@ class MLBModelTrainer:
                 fold_category_maps = None
                 fold_all_final_cols = None
 
-                # if self.config.encoding_type == "one-hot":
-                #     fold_one_hot_encoder = OneHotEncoder(sparse_output=False, handle_unknown='ignore')
-                #     fold_one_hot_encoder.fit(X_train_fold[self.config.categorical_cols])
-                #     fold_encoded_cat_names = fold_one_hot_encoder.get_feature_names_out(self.config.categorical_cols)
-                #     fold_all_final_cols = fold_numerical_cols + list(fold_encoded_cat_names)
-                # elif self.config.encoding_type == "category":
-                #     fold_category_maps = {col: X_train_fold[col].unique().tolist() for col in self.config.categorical_cols}
-                #     fold_all_final_cols = fold_numerical_cols + self.config.categorical_cols
+                if self.config.encoding_type == "one-hot":
+                    fold_one_hot_encoder = OneHotEncoder(sparse_output=False, handle_unknown='ignore')
+                    fold_one_hot_encoder.fit(X_train_fold[self.config.categorical_cols])
+                    fold_encoded_cat_names = fold_one_hot_encoder.get_feature_names_out(self.config.categorical_cols)
+                    fold_all_final_cols = fold_numerical_cols + list(fold_encoded_cat_names)
+                elif self.config.encoding_type == "category":
+                    fold_category_maps = {col: X_train_fold[col].unique().tolist() for col in self.config.categorical_cols}
+                    fold_all_final_cols = fold_numerical_cols + self.config.categorical_cols
 
-                # X_train_encoded_fold = transform_categorical_features(
-                #     df=X_train_fold,
-                #     categorical_cols=self.config.categorical_cols,
-                #     encoding_type=self.config.encoding_type,
-                #     one_hot_encoder=fold_one_hot_encoder,
-                #     category_maps=fold_category_maps,
-                #     numerical_cols=fold_numerical_cols,
-                #     all_final_cols=fold_all_final_cols
-                # )
+                X_train_encoded_fold = transform_categorical_features(
+                    df=X_train_fold,
+                    categorical_cols=self.config.categorical_cols,
+                    encoding_type=self.config.encoding_type,
+                    one_hot_encoder=fold_one_hot_encoder,
+                    category_maps=fold_category_maps,
+                    numerical_cols=fold_numerical_cols,
+                    all_final_cols=fold_all_final_cols
+                )
 
-                # X_test_encoded_fold = transform_categorical_features(
-                #     df=X_test_fold,
-                #     categorical_cols=self.config.categorical_cols,
-                #     encoding_type=self.config.encoding_type,
-                #     one_hot_encoder=fold_one_hot_encoder,
-                #     category_maps=fold_category_maps,
-                #     numerical_cols=fold_numerical_cols,
-                #     all_final_cols=fold_all_final_cols
-                # )
+                X_test_encoded_fold = transform_categorical_features(
+                    df=X_test_fold,
+                    categorical_cols=self.config.categorical_cols,
+                    encoding_type=self.config.encoding_type,
+                    one_hot_encoder=fold_one_hot_encoder,
+                    category_maps=fold_category_maps,
+                    numerical_cols=fold_numerical_cols,
+                    all_final_cols=fold_all_final_cols
+                )
                 # --- End Categorical Encoding for CV Fold ---
 
                 # Store feature names from the *first* fold's processed training data.
@@ -228,8 +228,8 @@ class MLBModelTrainer:
                     self.all_final_feature_names = fold_all_final_cols
                     self.feature_names = fold_all_final_cols
                 
-                # Fit CatBoost
-                base_model.fit(X_train_fold, y_train_fold, cat_features=self.config.categorical_cols)
+                # Fit LightGBM
+                base_model.fit(X_train_encoded_fold, y_train_fold)
 
                 # Create calibrated classifier
                 calibrated_model = CalibratedClassifierCV(
@@ -238,11 +238,11 @@ class MLBModelTrainer:
                 )
                 
                 # Train calibrated model
-                calibrated_model.fit(X_train_fold, y_train_fold)
+                calibrated_model.fit(X_train_encoded_fold, y_train_fold)
 
                 # Make predictions
-                y_pred = calibrated_model.predict(X_test_fold)
-                y_pred_proba = calibrated_model.predict_proba(X_test_fold)[:, 1]
+                y_pred = calibrated_model.predict(X_test_encoded_fold)
+                y_pred_proba = calibrated_model.predict_proba(X_test_encoded_fold)[:, 1]
 
                 # Calculate metrics
                 accuracy = accuracy_score(y_test_fold, y_pred)
@@ -311,35 +311,35 @@ class MLBModelTrainer:
         self.numerical_feature_names = [col for col in X.columns if col not in self.config.categorical_cols]
 
         # Fit and store the appropriate encoder/category maps based on encoding_type
-        # if self.config.encoding_type == "one-hot":
-        #     self.one_hot_encoder = OneHotEncoder(sparse_output=False, handle_unknown='ignore')
-        #     self.one_hot_encoder.fit(X[self.config.categorical_cols])
-        #     encoded_cat_names = self.one_hot_encoder.get_feature_names_out(self.config.categorical_cols)
-        #     self.all_final_feature_names = self.numerical_feature_names + list(encoded_cat_names)
-        # elif self.config.encoding_type == "category":
-        #     self.category_maps = {col: X[col].unique().tolist() for col in self.config.categorical_cols}
-        #     self.all_final_feature_names = self.numerical_feature_names + self.config.categorical_cols
-        # else:
-        #     raise ValueError(f"Unsupported encoding_type: {self.config.encoding_type}")
+        if self.config.encoding_type == "one-hot":
+            self.one_hot_encoder = OneHotEncoder(sparse_output=False, handle_unknown='ignore')
+            self.one_hot_encoder.fit(X[self.config.categorical_cols])
+            encoded_cat_names = self.one_hot_encoder.get_feature_names_out(self.config.categorical_cols)
+            self.all_final_feature_names = self.numerical_feature_names + list(encoded_cat_names)
+        elif self.config.encoding_type == "category":
+            self.category_maps = {col: X[col].unique().tolist() for col in self.config.categorical_cols}
+            self.all_final_feature_names = self.numerical_feature_names + self.config.categorical_cols
+        else:
+            raise ValueError(f"Unsupported encoding_type: {self.config.encoding_type}")
         
-        # # Transform the full training data using the newly fitted encoder/maps
-        # X_encoded  = transform_categorical_features(
-        #     df=X,
-        #     categorical_cols=self.config.categorical_cols,
-        #     encoding_type=self.config.encoding_type,
-        #     one_hot_encoder=self.one_hot_encoder,
-        #     category_maps=self.category_maps,
-        #     numerical_cols=self.numerical_feature_names,
-        #     all_final_cols=self.all_final_feature_names
-        # )
+        # Transform the full training data using the newly fitted encoder/maps
+        X_encoded  = transform_categorical_features(
+            df=X,
+            categorical_cols=self.config.categorical_cols,
+            encoding_type=self.config.encoding_type,
+            one_hot_encoder=self.one_hot_encoder,
+            category_maps=self.category_maps,
+            numerical_cols=self.numerical_feature_names,
+            all_final_cols=self.all_final_feature_names
+        )
 
         # Assign the final feature names to self.feature_names for model saving/loading consistency
         self.feature_names = self.all_final_feature_names
 
         # Create and train final model
-        base_model = cb.CatBoostClassifier(**self.config.hyperparams)
+        base_model = lgb.LGBMClassifier(**self.config.hyperparams)
         #base_model = self._get_lgbm_model()
-        base_model.fit(X, y, cat_features=self.config.categorical_cols)
+        base_model.fit(X, y)
 
         # Store base model to extract feature importance
         self.model = base_model
@@ -376,8 +376,8 @@ class MLBModelTrainer:
             raise ValueError("Model must be trained before plotting calibration curve")
         
         # Use the helper method to transform the data for plotting
-        #X_encoded = self._get_transformed_data(X)
-        X_encoded = X.copy()
+        X_encoded = self._get_transformed_data(X)
+        #X_encoded = X.copy()
 
         # Get probabilities
         y_pred_proba = self.calibrated_model.predict_proba(X_encoded)[:, 1]
@@ -493,8 +493,8 @@ class MLBModelTrainer:
         if not self.is_trained: 
             raise ValueError("Model must be trained before making predictions")
         
-        #X_encoded = self._get_transformed_data(X)
-        X_encoded = X.copy()
+        X_encoded = self._get_transformed_data(X)
+        #X_encoded = X.copy()
 
         return self.calibrated_model.predict(X_encoded)
     
@@ -503,8 +503,8 @@ class MLBModelTrainer:
         if not self.is_trained: 
             raise ValueError("Model must be trained before making predictions")
         
-        #X_encoded = self._get_transformed_data(X)
-        X_encoded = X.copy()
+        X_encoded = self._get_transformed_data(X)
+        #X_encoded = X.copy()
 
         return self.calibrated_model.predict_proba(X_encoded)
     
@@ -549,22 +549,21 @@ if __name__=='__main__':
 
         # Configuration
         config = ModelConfig(
-            model_type="catboost",
+            model_type="lightgbm",
             hyperparams={
-                #'objective': 'binary',
-                'loss_function': 'Logloss',
-                'verbose': False,
-                # 'n_estimators': 500,        # Increased estimators for LGBM
-                # 'learning_rate': 0.05,      # Learning rate for boosting
-                # 'num_leaves': 31,           # Controls complexity of trees
-                # 'max_depth': -1,            # No limit on depth, often works well with num_leaves
-                # 'min_child_samples': 20,    # Minimum data in a leaf
-                # 'subsample': 0.8,           # Fraction of samples to be randomly sampled
-                # 'colsample_bytree': 0.8,    # Fraction of features to be randomly sampled per tree
-                # 'random_state': 888,
-                # 'n_jobs': -1,
-                # 'reg_alpha': 0.1,           # L1 regularization
-                # 'reg_lambda': 0.1          # L2 regularization
+                'objective': 'binary',
+                'metric': 'logloss',
+                'n_estimators': 500,        # Increased estimators for LGBM
+                'learning_rate': 0.05,      # Learning rate for boosting
+                'num_leaves': 31,           # Controls complexity of trees
+                'max_depth': -1,            # No limit on depth, often works well with num_leaves
+                'min_child_samples': 20,    # Minimum data in a leaf
+                'subsample': 0.8,           # Fraction of samples to be randomly sampled
+                'colsample_bytree': 0.8,    # Fraction of features to be randomly sampled per tree
+                'random_state': 888,
+                'n_jobs': -1,
+                'reg_alpha': 0.1,           # L1 regularization
+                'reg_lambda': 0.1          # L2 regularization
             },
             cv_params={
                 'test_size': 30,
@@ -606,14 +605,14 @@ if __name__=='__main__':
         trainer.train_final_model(X_train_init, y_train_init)
 
         # Plot calibration curve
-        trainer.plot_calibration_curve(X_train_init, y_train_init, save_path='src/figures/calibration_curve_train.png')
-        trainer.plot_calibration_curve(X_holdout, y_holdout, save_path='src/figures/calibration_curve_holdout.png')
+        trainer.plot_calibration_curve(X_train_init, y_train_init, save_path='src/figures/calibration_curve_train_lightgbm.png')
+        trainer.plot_calibration_curve(X_holdout, y_holdout, save_path='src/figures/calibration_curve_holdout_lightgbm.png')
 
         # Plot feature importances
-        trainer.plot_feature_importance(save_path='src/figures/feature_importances.png', top_n = 20)
+        trainer.plot_feature_importance(save_path='src/figures/feature_importances_lightgbm.png', top_n = 20)
 
         # Save model
-        trainer.save_model('src/saved_models/trained_mlb_model.pkl')
+        trainer.save_model('src/saved_models/trained_mlb_model_lightgbm.pkl')
 
         # Input example for MLflow
         # sample_input_raw = X_train_init.head(1).copy()
@@ -633,8 +632,8 @@ if __name__=='__main__':
         # Log the trained CalibratedClassifierCV model
         mlflow.sklearn.log_model(
             sk_model=trainer.calibrated_model,
-            name="mlb_model_catboost",
-            registered_model_name="MLB_Calibrated_CatBoost_Model",
+            name="mlb_model_lightgbm",
+            registered_model_name="MLB_Calibrated_LightGBM_Model",
             #input_example=sample_input_transformed,
             #signature=signature
         )
