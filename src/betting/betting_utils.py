@@ -1,3 +1,5 @@
+import argparse
+
 def convert_odds_to_probability(odds: int) -> float:
     """Convert moneyline odds to implied probability"""
     if odds < 0:
@@ -64,64 +66,35 @@ def analyze_bet(pred_prob: float, odds: int) -> dict:
     half_kelly = .5*full_kelly
 
     return {
-        "expected_profit": expected_profit,
-        "implied_prob": implied_prob,
-        "predicted_win_prob": pred_prob,
-        "edge": edge,
+        "expected_profit": round(expected_profit,2),
+        "implied_prob": round(implied_prob,4),
+        "predicted_win_prob": round(pred_prob,4),
+        "edge": round(edge,4),
         "is_valuable": expected_profit > 0,
-        "full_kelly_bet_size": full_kelly,
-        "half_kelly_bet_size": half_kelly
+        "full_kelly_bet_size": round(full_kelly,4),
+        "half_kelly_bet_size": round(half_kelly,4)
     }
 
 
 if __name__=='__main__':
-    # Examples
-    # Case 1
-    print("Case 1")
-    away_odds = 120
-    home_odds = -200
-    away_win_prob = .35
-    home_win_prob = 1-away_win_prob
+    
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--home-odds", type=int)
+    parser.add_argument("--away-odds", type=int)
+    parser.add_argument("--home-win-prob", type=float)
+    args = parser.parse_args()
 
-    print(f"Away (+120) vs. Home (-200)")
+    away_odds = args.away_odds
+    home_odds = args.home_odds
+    home_win_prob = args.home_win_prob
+    away_win_prob = 1-args.home_win_prob
+    
+
+    print(f"Away ({away_odds}) vs. Home ({home_odds})\n")
     print(f"Bet on Away...")
     print(analyze_bet(away_win_prob, away_odds))
 
-    print("Bet on Home...")
+    print("\nBet on Home...")
     print(analyze_bet(home_win_prob, home_odds))
 
-    print("\nCase 2")
-    away_odds = 120
-    home_odds = -200
-    away_win_prob = .65
-    home_win_prob = 1-away_win_prob
-    print(f"Away (+120) vs. Home (-200)")
-    print(f"Bet on Away...")
-    print(analyze_bet(away_win_prob, away_odds))
-
-    print("Bet on Home...")
-    print(analyze_bet(home_win_prob, home_odds))
-
-    print("\nCase 3")
-    away_odds = -200
-    home_odds = 120
-    away_win_prob = .35
-    home_win_prob = 1-away_win_prob
-    print(f"Away (-200) vs. Home (+120)")
-    print(f"Bet on Away...")
-    print(analyze_bet(away_win_prob, away_odds))
-
-    print("Bet on Home...")
-    print(analyze_bet(home_win_prob, home_odds))
-
-    print("\nCase 4")
-    away_odds = -200
-    home_odds = 120
-    away_win_prob = .65
-    home_win_prob = 1-away_win_prob
-    print(f"Away (-200) vs. Home (+120)")
-    print(f"Bet on Away...")
-    print(analyze_bet(away_win_prob, away_odds))
-
-    print("Bet on Home...")
-    print(analyze_bet(home_win_prob, home_odds))
+    

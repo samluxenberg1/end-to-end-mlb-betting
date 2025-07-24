@@ -90,7 +90,7 @@ class MLBModelTrainer:
         # Check for required categorical columns
         missing_cols = set(self.config.categorical_cols) - set(X.columns)
         if missing_cols: 
-            raise ValueError("Missing required categorical columns: {missing_cols}")
+            raise ValueError(f"Missing required categorical columns: {missing_cols}")
         
     def _calculate_calibration_score(self, y_true: np.ndarray, y_prob: np.ndarray, n_bins: int = 10) -> float:
         """Calculate calibration score (reliability)"""
@@ -536,19 +536,39 @@ if __name__=='__main__':
         )
 
         # Remove columns
-        cols_to_remove = [
-            "game_id", "game_date", "game_date_time", "home_team_id",
-            "away_team_id", "home_score", "away_score", "state", target
-        ]
+        # cols_to_remove = [
+        #     "game_id", "game_date", "game_date_time", "home_team_id",
+        #     "away_team_id", "home_score", "away_score", "state", target
+        # ]
 
+        # Separate columns
+        cols_to_remove = [target, 'game_id','game_date','game_date_time',
+                          'home_team_id','away_team_id', 'state', 'game_type', 
+                          'home_score','away_score'
+        ]
+        cat_cols = ['home_team','away_team','venue']
+        num_cols = list((set(df_train_init.columns)-set(cols_to_remove))-set(cat_cols))
+
+        # Standardize with regularized logistic regression
+        X_train_init_num = df_train_init[num_cols]
+        X_train_init_cat = df_train_init[cat_cols]
+        scalar = StandardScaler() 
+        X_train_init_scaled = pd.DataFrame(scalar.fit_transform(X_train_init_num), columns=num_cols) 
+
+        X_holdout_num = df_holdout[num_cols]
+        X_holdout_scaled = pd.DataFrame(scalar.transform(X_holdout_num), columns=num_cols)
+        X_holdout_cat = df_holdout[cat_cols]
+
+        X_train_init = pd.concat([X_train_init_scaled, X_train_init_cat], axis=1)
+        X_holdout = pd.concat([X_holdout_scaled, X_holdout_cat], axis=1)
 
         # Prepare features (X) and target (y) for training and holdout
-        X_train_init = df_train_init.drop(cols_to_remove, axis=1)
+        #X_train_init = df_train_init.drop(cols_to_remove, axis=1)
         #feature_subset = ['home_team_games_prev_7days', 'home_team_season_opener_flag','home_team_rest_days','away_team']
         #X_train_init = X_train_init[feature_subset]
         y_train_init = df_train_init[target]
 
-        X_holdout = df_holdout.drop(cols_to_remove, axis=1)
+        #X_holdout = df_holdout.drop(cols_to_remove, axis=1)
         #X_holdout = X_holdout[feature_subset]
         y_holdout = df_holdout[target]
 
@@ -559,7 +579,7 @@ if __name__=='__main__':
 
         # Configuration
         config = ModelConfig(
-            model_type="logistic",
+            model_type="logistic-scaled",
             hyperparams={
                 'penalty': 'l1',
                 'C': .005,
@@ -584,7 +604,7 @@ if __name__=='__main__':
                 'window_type': 'rolling'
             },
             #categorical_cols=['away_team'], 
-            categorical_cols=['home_team','away_team','venue','game_type'],
+            categorical_cols=cat_cols,
             encoding_type='one-hot',
             calibration_method='isotonic',
             random_state=888,
@@ -617,14 +637,14 @@ if __name__=='__main__':
         trainer.train_final_model(X_train_init, y_train_init)
 
         # Plot calibration curve
-        trainer.plot_calibration_curve(X_train_init, y_train_init, save_path='src/figures/calibration_curve_train_logistic.png')
-        trainer.plot_calibration_curve(X_holdout, y_holdout, save_path='src/figures/calibration_curve_holdout_logistic.png')
+        trainer.plot_calibration_curve(X_train_init, y_train_init, save_path='src/figures/calibration_curve_train_logistic_scaled.png')
+        trainer.plot_calibration_curve(X_holdout, y_holdout, save_path='src/figures/calibration_curve_holdout_logistic_scaled.png')
 
         # Plot feature importances
-        trainer.plot_feature_importance(save_path='src/figures/feature_importances_logistic.png', top_n = 20)
+        trainer.plot_feature_importance(save_path='src/figures/feature_importances_logistic_scaled.png', top_n = 20)
 
         # Save model
-        trainer.save_model('src/saved_models/trained_mlb_model_logistic.pkl')
+        trainer.save_model('src/saved_models/trained_mlb_model_logistic_scaled.pkl')
 
         # Input example for MLflow
         # sample_input_raw = X_train_init.head(1).copy()
@@ -644,8 +664,8 @@ if __name__=='__main__':
         # Log the trained CalibratedClassifierCV model
         mlflow.sklearn.log_model(
             sk_model=trainer.calibrated_model,
-            name="mlb_model_logistic",
-            registered_model_name="MLB_Calibrated_Logistic_Model",
+            name="mlb_model_logistic_scaled",
+            registered_model_name="MLB_Calibrated_Logistic_Scaled_Model",
             #input_example=sample_input_transformed,
             #signature=signature
         )
