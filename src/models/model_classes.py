@@ -11,6 +11,7 @@ class ModelConfig:
     encoding_type: str = 'one-hot'
     calibration_method: str = 'isotonic' # or sigmoid
     random_state: int = 888
+    holdout_start_date: str = '2025-05-01'
 
 @dataclass
 class TrainingResults:

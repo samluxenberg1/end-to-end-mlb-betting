@@ -339,7 +339,7 @@ class MLBModelTrainer:
         # Create and train final model
         base_model = lgb.LGBMClassifier(**self.config.hyperparams)
         #base_model = self._get_lgbm_model()
-        base_model.fit(X, y)
+        base_model.fit(X_encoded, y)
 
         # Store base model to extract feature importance
         self.model = base_model
@@ -349,7 +349,7 @@ class MLBModelTrainer:
             method=self.config.calibration_method
         )
 
-        self.calibrated_model.fit(X, y)
+        self.calibrated_model.fit(X_encoded, y)
         self.is_trained = True
 
         logger.info("Final model training completed")
@@ -424,7 +424,7 @@ class MLBModelTrainer:
             logger.warning("Base model does not have feature_importances_ attribute. Cannot plot importance.")
             return 
         
-        importances = self.model.get_feature_importance()
+        importances = self.model.feature_importances_
         feature_names = self.feature_names
 
         if feature_names is None or len(feature_names) != len(importances):
@@ -517,12 +517,13 @@ if __name__=='__main__':
         # Load data
         input_model_data = "data/processed/model_data.csv"
         df_model = load_model_data(input_model_data)
+        df_model  = df_model[df_model['game_date']<datetime.today()]
         target = 'home_win'
-
+        holdout_start_date = '2025-05-15'
         # Data splitting
         df_train_init, df_holdout, _ = data_split(
             df=df_model,
-            holdout_start_date='2025-05-01',
+            holdout_start_date=holdout_start_date,
             group_col='game_date'
         )
 
@@ -576,7 +577,8 @@ if __name__=='__main__':
             categorical_cols=['home_team','away_team','venue','game_type'],
             encoding_type='category',
             calibration_method='isotonic',
-            random_state=888
+            random_state=888,
+            holdout_start_date=holdout_start_date
         )
 
         # Log ModelConfig parameters
@@ -593,13 +595,13 @@ if __name__=='__main__':
         trainer = MLBModelTrainer(config)
 
         # Cross-validation
-        results = trainer.train_with_cross_validation(X_train_init, y_train_init, groups)
+        #results = trainer.train_with_cross_validation(X_train_init, y_train_init, groups)
 
-        mlflow.log_metric("cv_mean_accuracy", results.mean_accuracy)
-        mlflow.log_metric("cv_mean_log_loss", results.mean_log_loss)
-        mlflow.log_metric("cv_mean_brier_score", results.mean_brier_score)
-        mlflow.log_metric("cv_mean_auc", results.mean_auc)
-        mlflow.log_metric("cv_mean_calibration_score", results.mean_calibration_score)
+        # mlflow.log_metric("cv_mean_accuracy", results.mean_accuracy)
+        # mlflow.log_metric("cv_mean_log_loss", results.mean_log_loss)
+        # mlflow.log_metric("cv_mean_brier_score", results.mean_brier_score)
+        # mlflow.log_metric("cv_mean_auc", results.mean_auc)
+        # mlflow.log_metric("cv_mean_calibration_score", results.mean_calibration_score)
 
         # Train final model
         trainer.train_final_model(X_train_init, y_train_init)

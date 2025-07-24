@@ -81,6 +81,8 @@ def join_odds_to_scored_data(df_scored: pd.DataFrame, df_odds: pd.DataFrame) -> 
         .drop('level_1', axis=1)
     )
 
+    df_scored['game_date_only'] = df_scored['game_date'].dt.date
+
     logging.info(f"df_scored Shape AFTER Deduplication: {df_scored.shape}")
     logging.info(f"df_scored # Unique Games AFTER Join: {df_scored['game_id'].nunique()}")
 
@@ -151,7 +153,12 @@ def calculate_betting_metrics(df_scored: pd.DataFrame) -> pd.DataFrame:
 
     return df_scored
 
-def summarize_evaluation(df_scored: pd.DataFrame): 
+def summarize_evaluation(df_scored: pd.DataFrame, cutoff_date_str: str = None):
+
+    if cutoff_date_str:
+        cutoff_date = pd.to_datetime(cutoff_date_str, utc=True)
+        df_scored = df_scored[df_scored['game_date']>cutoff_date]
+
     # Number of valuable bets
     num_home_valuable = df_scored['home_is_valuable'].sum()
     num_away_valuable = df_scored['away_is_valuable'].sum()
@@ -194,6 +201,8 @@ def run_evaluation(df_scored: pd.DataFrame, df_odds: pd.DataFrame):
     # Step 3 - Output
     summarize_evaluation(df_scored=df_scored)
 
+    summarize_evaluation(df_scored=df_scored, cutoff_date_str='2025-05-15')
+
     return df_scored
 
 
@@ -207,8 +216,12 @@ if __name__=='__main__':
 
     df_out = run_evaluation(df_scored=df_scored, df_odds=df_odds)
 
+    print(df_out.columns[df_out.columns.str.contains('game_date')])
+
     save_path = "src/scoring/evaluation.csv"
     df_out.to_csv(save_path, index=False)
+
+    # Need to finish bankro
 
 
 
