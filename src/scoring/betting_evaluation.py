@@ -153,20 +153,29 @@ def calculate_betting_metrics(df_scored: pd.DataFrame) -> pd.DataFrame:
 
     return df_scored
 
+def plot_net_profit(df_scored: pd.DataFrame):
+    plt.plot(df_scored['game_date'], df_scored['home_net_profit'], label='Home Net Profit')
+    plt.plot(df_scored['game_date'], df_scored['away_net_profit'], label='Away Net Profit')
+    plt.legend(loc='best')
+    plt.title('Net Profits Over Time | Backtest')
+    plt.show()
+
 def summarize_evaluation(df_scored: pd.DataFrame, cutoff_date_str: str = None):
 
     if cutoff_date_str:
         cutoff_date = pd.to_datetime(cutoff_date_str, utc=True)
         df_scored = df_scored[df_scored['game_date']>cutoff_date]
+    else:
+        cutoff_date=pd.to_datetime('2021-04-01',utc=True)
 
     # Number of valuable bets
     num_home_valuable = df_scored['home_is_valuable'].sum()
     num_away_valuable = df_scored['away_is_valuable'].sum()
     num_valuable = num_home_valuable + num_away_valuable
 
-    logging.info(f"Number of Valuable Bets Since 2021: {num_valuable} out of {len(df_scored)} games")
-    logging.info(f"Proportion of Valuable Home Bets Since 2021: {num_home_valuable/df_scored['home_is_valuable'].count(): .3f}")
-    logging.info(f"Proportion of Valuable Away Bets Since 2021: {num_away_valuable/df_scored['away_is_valuable'].count(): .3f}")
+    logging.info(f"Number of Valuable Bets Since {cutoff_date.date().strftime('%Y-%m-%d')}: {num_valuable} out of {len(df_scored)} games")
+    logging.info(f"Proportion of Valuable Home Bets Since {cutoff_date.date().strftime('%Y-%m-%d')}: {num_home_valuable/df_scored['home_is_valuable'].count(): .3f}")
+    logging.info(f"Proportion of Valuable Away Bets Since {cutoff_date.date().strftime('%Y-%m-%d')}: {num_away_valuable/df_scored['away_is_valuable'].count(): .3f}")
 
     num_home_value_bet_agree = df_scored['home_value_bet_agree'].sum()
     num_away_value_bet_agree = df_scored['away_value_bet_agree'].sum()
@@ -181,11 +190,11 @@ def summarize_evaluation(df_scored: pd.DataFrame, cutoff_date_str: str = None):
     total_home_net_profit = df_scored['home_net_profit'].sum()
     total_away_net_profit = df_scored['away_net_profit'].sum()
 
-    logging.info(f"Total Home Net Profits Since 2021: ${total_home_net_profit}")
-    logging.info(f"Total Away Net Profits Since 2021: ${total_away_net_profit}")
-    logging.info(f"Total Net Profits Since 2021: ${total_home_net_profit+total_away_net_profit}")
+    logging.info(f"Total Home Net Profits Since {cutoff_date.date().strftime('%Y-%m-%d')}: ${total_home_net_profit}")
+    logging.info(f"Total Away Net Profits Since {cutoff_date.date().strftime('%Y-%m-%d')}: ${total_away_net_profit}")
+    logging.info(f"Total Net Profits Since {cutoff_date.date().strftime('%Y-%m-%d')}: ${total_home_net_profit+total_away_net_profit}")
 
-
+    plot_net_profit(df_scored=df_scored)
 
     return 
     
