@@ -35,7 +35,9 @@ def load_games_from_db():
                     AND away_team IS NOT NULL;
                 """
                 df_games = pd.read_sql_query(query, conn)
+                print(f"Step 1: {df_games[df_games['game_id']==777001]}")
                 df_games = df_games[(df_games['game_type']!='Scheduled') | (df_games['game_date']>=date.today())]
+                print(f"Step 2: {df_games[df_games['game_id']==777001]}")
                 
         logging.info(f"Successully loaded {len(df_games)} games from database")
         

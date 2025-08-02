@@ -106,6 +106,17 @@ def load_games_to_db(
 
             logging.info(f"Inserting {len(values)} rows into the database...")
             
+            seen = set()
+            unique_values = []
+            for row_values in values:
+                game_id = row_values[0]  # game_id is the first column
+                if game_id not in seen:
+                    seen.add(game_id)
+                    unique_values.append(row_values)
+                else: 
+                    logging.warning(f"Duplicate found for game_id={game_id}. Skipping.")
+            values = unique_values
+
             execute_values(cur, sql, values)
             conn.commit()
             logging.info("Insert complete.")

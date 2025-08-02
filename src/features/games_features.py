@@ -25,22 +25,22 @@ def team_schedule(
         The DataFrame is sorted by team name and then by game datetime.
      """
     # Extract home and away games for every team
-    common_cols = [date_col, date_time_col, 'home_score','away_score']
-    home_cols = ['home_team'] + common_cols
+    cols = ['home_team','away_team', date_col, date_time_col, 'home_score','away_score']
     home_schedule = (
-        df[home_cols]
+        df[cols]
         .rename(columns={
             'home_team': 'team',
+            'away_team': 'opp_team',
             'home_score': 'team_score',
             'away_score': 'opp_score'
         })
         .assign(home_ind=1)
     )
-    away_cols = ['away_team'] + common_cols
     away_schedule = (
-        df[away_cols]
+        df[cols]
         .rename(columns={
             'away_team': 'team',
+            'home_team': 'opp_team',
             'home_score': 'opp_score',
             'away_score': 'team_score'
         })
@@ -142,6 +142,58 @@ def team_games_previous_7days(
         .reset_index(drop=True,level=0)
     )
 
+def team_matchup_features(
+    df: pd.DataFrame,
+    date_col: str = 'game_date',
+    date_time_col: str = 'game_date_time'
+) -> pd.DataFrame:
+    """
+    Calculates several matchup-level features including: 
+        - days since last matchup
+        - last matchup run differential
+        - incoming season matchup games
+        - incoming season matchup win %
+
+    Parameters
+    ----------
+    df : pd.DataFrame
+        Input DataFrame containing game data with team and schedule information. 
+    date_col : str, default 'game_date'
+        Column name containing date information used for chronological sorting
+    date_time_col : str, default 'game_date_time'
+        Column name containing datetime information used for chronological sorting. 
+        Necessary for sorting between double headers for a single team. 
+
+    Returns
+    -------
+    pd.DataFrame
+        DataFrame with several features at the matchup level.
+    """
+    # Get schedule information
+    df_team_sched = team_schedule(df, date_time_col=date_time_col, date_col=date_col)
+
+    # Days since last matchup game
+    df_team_sched['days_since_last_matchup'] = df_team_sched.groupby(['team','opp_team'])['game_date'].diff().dt.days
+    df_team_sched['season_start_date'] = pd.to_datetime(df_team_sched['game_date'].dt.year.astype(str) + '-04-01')
+    df_team_sched['days_since_season_start_date'] = (df_team_sched['game_date']-df_team_sched['season_start_date']).dt.days
+    df_team_sched['days_since_last_matchup'] = df_team_sched['days_since_last_matchup'].fillna(180+df_team_sched['days_since_season_start_date'])
+    
+    # Last matchup game run differential
+    df_team_sched['last_matchup_run_diff'] = df_team_sched.groupby(['team','opp_team'])['team_run_diff'].shift(1)
+    df_team_sched['last_matchup_run_diff'] = df_team_sched['last_matchup_run_diff'].fillna(0)
+
+    # Incoming season matchup games and win %
+    df_team_sched['season_matchup_wins'] = df_team_sched.groupby(['team','opp_team','season'])['team_win'].cumsum()
+    df_team_sched['season_matchup_games'] = df_team_sched.groupby(['team','opp_team','season'])['team_win'].cumcount()+1
+    df_team_sched['season_matchup_win%'] = df_team_sched['season_matchup_wins']/df_team_sched['season_matchup_games']
+    df_team_sched['incoming_season_matchup_win%'] = df_team_sched.groupby(['team','opp_team','season'])['season_matchup_win%'].shift(1)
+    df_team_sched['incoming_season_matchup_win%'] = df_team_sched['incoming_season_matchup_win%'].fillna(0)
+
+    # Drop unecessary columns
+    cols_to_keep = ['team','opp_team','game_date','game_date_time','days_since_last_matchup','last_matchup_run_diff','incoming_season_matchup_win%']
+    df_team_sched = df_team_sched[cols_to_keep]
+    
+    return df_team_sched
 
 def get_schedule_features(
         df: pd.DataFrame, 
@@ -179,15 +231,21 @@ def get_schedule_features(
     df_team_sched['team_rest_days'] = team_rest_days(df)
     # Add rest_days_7day_avg
     df_team_sched['team_games_prev_7days'] = team_games_previous_7days(df)
+    # Add matchup features
+    df_team_matchup = team_matchup_features(df)
+    
+    # Merge into schedule data
+    df_team_sched = df_team_sched.merge(df_team_matchup, how='left',on=['team','opp_team','game_date','game_date_time'])
 
     # Merge
-    team_schedule_cols = ['team','team_rest_days','team_games_prev_7days', 'team_season_opener_flag'] # no date_time_col here -- add separately
+    team_schedule_cols = ['team','team_rest_days','team_games_prev_7days', 'team_season_opener_flag','days_since_last_matchup','last_matchup_run_diff','incoming_season_matchup_win%'] # no date_time_col here -- add separately
     df_games = merge_team_features_into_games(
         df_games=df, 
         df_team_schedule=df_team_sched,
         team_schedule_cols=team_schedule_cols, 
         date_time_col=date_time_col
         )
+    df_games.drop(['away_days_since_last_matchup','away_last_matchup_run_diff','away_incoming_season_matchup_win%'], axis=1, inplace=True)
 
     return df_games
 
@@ -570,6 +628,9 @@ def create_game_features(df: pd.DataFrame, date_col: str = 'game_date',date_time
         - 'home_back2back': Binary indicator (1 if home team has ≤1 rest day)
         - 'away_back2back': Binary indicator (1 if away team has ≤1 rest day)
         - 'rest_difference': Home rest days minus away rest days
+        - 'home_days_since_last_matchup': Home days since last matchup game with same opponent
+        - 'home_last_matchup_run_diff': Home run differential of last matchup game with same opponent
+        - 'home_incoming_season_win%': Home win percentage of matchup incoming to current game with same opponent
         
         Outcome Features (last 10 games for each team):
         - 'home_win_rate_last_10': Home team win rate over last 10 games

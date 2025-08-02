@@ -17,7 +17,7 @@ def build_features():
 
     # Step 1: Load games data
     df_games = load_games_from_db()
-
+    #print(f"Step 1: {df_games[df_games['game_id']== 777001]}")
     # Step 2: Load team stats data
     df_team_stats = load_team_stats_from_db()
 
@@ -50,7 +50,7 @@ def build_features():
         df_team_stats[col] = pd.to_datetime(df_team_stats[col])
         
     df_games = create_team_stats_features(df_games=df_games, df_team_stats=df_team_stats, window=[7,14], lags=[1,2,3])
-
+    #print(f"Step 2: {df_games[df_games['game_id']== 777001]}")
     ## TODO: Feature engineering on player stats
 
     # Step 2: Define target
