@@ -96,7 +96,7 @@ class MLBModelTrainer:
         """Calculate calibration score (reliability)"""
         try: 
             fraction_of_positives, mean_predicted_value = calibration_curve(
-                y_true, y_prob, n_bins=n_bins, strategy="uniform"
+                y_true, y_prob, n_bins=n_bins, strategy="quantile"
             )
             # Calculate Expected Calibration Error (ECE)
             bin_boundaries = np.linspace(0,1,n_bins+1)
@@ -527,7 +527,7 @@ if __name__=='__main__':
         df_model = load_model_data(input_model_data)
         df_model  = df_model[df_model['game_date']<datetime.today()]
         target = 'home_win'
-        holdout_start_date = '2025-07-24'
+        holdout_start_date = datetime.date.today().strftime("%Y-%m-%d")
         # Data splitting
         df_train_init, df_holdout, _ = data_split(
             df=df_model,
